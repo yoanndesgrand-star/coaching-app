@@ -4,20 +4,33 @@ import { supabase } from './lib/supabase'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Admin from './pages/Admin'
+import ResetPassword from './pages/ResetPassword'
 
 export default function App() {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [isPasswordReset, setIsPasswordReset] = useState(false)
 
   useEffect(() => {
+    const hash = window.location.hash
+    if (hash.includes('type=recovery')) {
+      setIsPasswordReset(true)
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
-      if (session) fetchProfile(session.user.id)
+      if (session && !hash.includes('type=recovery')) fetchProfile(session.user.id)
       else setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (_event === 'PASSWORD_RECOVERY') {
+        setIsPasswordReset(true)
+        setSession(session)
+        setLoading(false)
+        return
+      }
       setSession(session)
       if (session) fetchProfile(session.user.id)
       else { setProfile(null); setLoading(false) }
@@ -29,10 +42,7 @@ export default function App() {
   async function fetchProfile(userId) {
     try {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
+        .from('profiles').select('*').eq('id', userId).single()
       if (error) console.error('Profile error:', error)
       setProfile(data || null)
     } catch(e) {
@@ -41,6 +51,8 @@ export default function App() {
       setLoading(false)
     }
   }
+
+  if (isPasswordReset) return <ResetPassword />
 
   if (loading) return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'#080808' }}>
