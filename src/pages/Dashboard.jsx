@@ -106,7 +106,7 @@ export default function Dashboard({ profile, setProfile }) {
         </div>
 
         {/* RÉSERVER avec crédits */}
-        {profile.credits > 0 && (
+        {(profile.credits > 0 || isAbonne) && (
           <div style={s.ctaBar}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Tu as {profile.credits} crédit{profile.credits > 1 ? 's' : ''} disponible{profile.credits > 1 ? 's' : ''}</div>
