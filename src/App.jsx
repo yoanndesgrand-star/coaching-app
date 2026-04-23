@@ -27,35 +27,48 @@ export default function App() {
   }, [])
 
   async function fetchProfile(userId) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-    setProfile(data)
-    setLoading(false)
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+      if (error) console.error('Profile error:', error)
+      setProfile(data || null)
+    } catch(e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 32, color: 'var(--gold)', marginBottom: 8 }}>Yoann Desgrand</div>
-        <div style={{ fontSize: 13, color: 'var(--muted)' }}>Chargement…</div>
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'#080808' }}>
+      <div style={{ textAlign:'center' }}>
+        <div style={{ fontFamily:'Cormorant Garamond, serif', fontSize:32, color:'#C4973A', marginBottom:8 }}>Yoann Desgrand</div>
+        <div style={{ fontSize:13, color:'#7a7065' }}>Chargement…</div>
       </div>
+    </div>
+  )
+
+  if (!session) return (
+    <Routes>
+      <Route path="*" element={<Login />} />
+    </Routes>
+  )
+
+  if (!profile) return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'#080808', color:'#f87171', fontSize:14 }}>
+      Profil introuvable. Contacte le support.
     </div>
   )
 
   return (
     <Routes>
-      <Route path="/login" element={!session ? <Login /> : <Navigate to="/" />} />
-      <Route path="/admin" element={
-        session && profile?.is_admin ? <Admin profile={profile} /> : <Navigate to="/" />
-      } />
-      <Route path="/" element={
-        session
-          ? (profile?.is_admin ? <Navigate to="/admin" /> : <Dashboard profile={profile} setProfile={setProfile} />)
-          : <Navigate to="/login" />
-      } />
+      <Route path="/login" element={<Navigate to="/" />} />
+      <Route path="/admin" element={profile.is_admin ? <Admin profile={profile} /> : <Navigate to="/" />} />
+      <Route path="/" element={profile.is_admin ? <Navigate to="/admin" /> : <Dashboard profile={profile} setProfile={setProfile} />} />
+      <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   )
 }
