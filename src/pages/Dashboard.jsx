@@ -21,11 +21,7 @@ export default function Dashboard({ profile, setProfile }) {
 
   useEffect(() => {
     loadBookings()
-    const script = document.createElement('script')
-    script.src = 'https://assets.calendly.com/assets/external/widget.js'
-    script.async = true
-    document.body.appendChild(script)
-    return () => document.body.removeChild(script)
+
   }, [])
 
   async function loadBookings() {
@@ -51,8 +47,7 @@ export default function Dashboard({ profile, setProfile }) {
   }
 
   function openCalendly() {
-    if (typeof Calendly !== 'undefined') Calendly.initPopupWidget({ url: CALENDLY_URL })
-    else window.open(CALENDLY_URL, '_blank')
+    window.open(CALENDLY_URL, '_blank')
   }
 
   const nextBooking = bookings.find(b => b.time_slots && new Date(b.time_slots.start_time) > new Date())
@@ -222,7 +217,7 @@ const s = {
   statsGrid: { display:'grid', gridTemplateColumns:'1fr 2fr 1fr', gap:16, marginBottom:16 },
   statCard: { background:'var(--surface)', border:'1px solid var(--border)', borderRadius:12, padding:'24px' },
   statLabel: { fontSize:11, fontWeight:600, letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', marginBottom:8 },
-  statValue: { fontFamily:'Cormorant Garamond, serif', fontSize:52, fontWeight:300, lineHeight:1 },
+  statValue: { fontFamily:'Outfit, sans-serif', fontSize:52, fontWeight:600, lineHeight:1 },
   statSub: { fontSize:12, color:'var(--muted)', marginTop:4 },
   ctaBar: { display:'flex', alignItems:'center', justifyContent:'space-between', padding:'20px 28px', background:'rgba(196,151,58,0.06)', border:'1px solid rgba(196,151,58,0.2)', borderRadius:12, flexWrap:'wrap', gap:16, marginBottom:16 },
   section: { background:'var(--surface)', border:'1px solid var(--border)', borderRadius:12, padding:'28px', marginBottom:16 },
