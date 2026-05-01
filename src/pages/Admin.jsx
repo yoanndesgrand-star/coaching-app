@@ -11,10 +11,7 @@ export default function Admin({ profile }) {
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState(null)
 
-  // New slot form
   const [newSlot, setNewSlot] = useState({ date: '', time: '', duration: 60 })
-
-  // Add credits form
   const [creditForm, setCreditForm] = useState({ clientId: '', amount: 1, label: '' })
 
   useEffect(() => { loadAll() }, [])
@@ -46,6 +43,14 @@ export default function Admin({ profile }) {
     }
   }
 
+  async function deleteClient(id, name) {
+    if (!window.confirm(`Supprimer ${name} définitivement ?`)) return
+    await supabase.from('bookings').delete().eq('client_id', id)
+    await supabase.from('profiles').delete().eq('id', id)
+    setMsg({ type: 'success', text: `${name} a été supprimé.` })
+    loadAll()
+  }
+
   async function addSlot() {
     if (!newSlot.date || !newSlot.time) return
     const start = new Date(`${newSlot.date}T${newSlot.time}`)
@@ -71,7 +76,6 @@ export default function Admin({ profile }) {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      {/* NAV */}
       <nav style={s.nav}>
         <div style={s.navLogo}>Admin — Yoann <span style={{ color: GOLD }}>Desgrand</span></div>
         <button onClick={signOut} style={s.btnLogout}>Déconnexion</button>
@@ -85,7 +89,6 @@ export default function Admin({ profile }) {
           </div>
         )}
 
-        {/* TABS */}
         <div style={s.tabs}>
           {['clients', 'bookings', 'slots'].map(t => (
             <button key={t} onClick={() => setTab(t)} style={{ ...s.tab, ...(tab === t ? s.tabActive : {}) }}>
@@ -94,10 +97,8 @@ export default function Admin({ profile }) {
           ))}
         </div>
 
-        {/* CLIENTS */}
         {tab === 'clients' && (
           <div>
-            {/* Add credits form */}
             <div style={s.card}>
               <div style={s.cardTitle}>Ajouter des crédits</div>
               <div style={s.formRow}>
@@ -111,14 +112,13 @@ export default function Admin({ profile }) {
               </div>
             </div>
 
-            {/* Clients list */}
             <div style={s.card}>
               <div style={s.cardTitle}>Tous les clients</div>
               {loading ? <div style={{ color: 'var(--muted)', fontSize: 13 }}>Chargement…</div> : (
                 <table style={s.table}>
                   <thead>
                     <tr>
-                      {['Nom', 'Email', 'Téléphone', 'Type', 'Offre', 'Crédits', 'Inscrit le'].map(h => (
+                      {['Nom', 'Email', 'Téléphone', 'Type', 'Offre', 'Crédits', 'Inscrit le', ''].map(h => (
                         <th key={h} style={s.th}>{h}</th>
                       ))}
                     </tr>
@@ -137,6 +137,9 @@ export default function Admin({ profile }) {
                         <td style={s.td}><span style={s.badge}>{c.offer_label || '—'}</span></td>
                         <td style={s.td}><strong style={{ color: c.credits > 0 ? GOLD : '#f87171' }}>{c.credits || 0}</strong></td>
                         <td style={s.td}>{new Date(c.created_at).toLocaleDateString('fr-FR')}</td>
+                        <td style={s.td}>
+                          <button onClick={() => deleteClient(c.id, c.full_name || c.email)} style={s.btnDelete}>Supprimer</button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -146,7 +149,6 @@ export default function Admin({ profile }) {
           </div>
         )}
 
-        {/* BOOKINGS */}
         {tab === 'bookings' && (
           <div style={s.card}>
             <div style={s.cardTitle}>Toutes les réservations</div>
@@ -174,7 +176,6 @@ export default function Admin({ profile }) {
           </div>
         )}
 
-        {/* SLOTS */}
         {tab === 'slots' && (
           <div>
             <div style={s.card}>
@@ -222,74 +223,24 @@ export default function Admin({ profile }) {
 }
 
 const s = {
-  nav: {
-    position: 'sticky', top: 0, zIndex: 50,
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '16px 32px',
-    background: 'rgba(8,8,8,0.95)', backdropFilter: 'blur(8px)',
-    borderBottom: '1px solid var(--border)',
-  },
+  nav: { position: 'sticky', top: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 32px', background: 'rgba(8,8,8,0.95)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--border)' },
   navLogo: { fontFamily: 'Cormorant Garamond, serif', fontSize: 18 },
   container: { maxWidth: 1000, margin: '0 auto', padding: '32px 24px' },
-  msgBox: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '14px 18px', borderRadius: 8, border: '1px solid',
-    fontSize: 13, marginBottom: 24,
-  },
+  msgBox: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderRadius: 8, border: '1px solid', fontSize: 13, marginBottom: 24 },
   tabs: { display: 'flex', gap: 8, marginBottom: 24 },
-  tab: {
-    background: 'var(--surface)', border: '1px solid var(--border)',
-    color: 'var(--muted)', borderRadius: 8, padding: '10px 20px',
-    fontSize: 13, cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
-    transition: 'all 0.2s',
-  },
+  tab: { background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)', borderRadius: 8, padding: '10px 20px', fontSize: 13, cursor: 'pointer', fontFamily: 'Outfit, sans-serif', transition: 'all 0.2s' },
   tabActive: { borderColor: GOLD, color: GOLD, background: 'rgba(196,151,58,0.08)' },
-  card: {
-    background: 'var(--surface)', border: '1px solid var(--border)',
-    borderRadius: 12, padding: '24px', marginBottom: 16,
-  },
-  cardTitle: {
-    fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase',
-    color: GOLD, marginBottom: 20,
-  },
+  card: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '24px', marginBottom: 16 },
+  cardTitle: { fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase', color: GOLD, marginBottom: 20 },
   formRow: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' },
-  input: {
-    background: 'var(--surface2)', border: '1px solid var(--border)',
-    borderRadius: 8, padding: '10px 14px', color: 'var(--text)',
-    fontSize: 13, fontFamily: 'Outfit, sans-serif', flex: 1, minWidth: 120,
-    outline: 'none',
-  },
-  btnGold: {
-    background: GOLD, color: '#000', border: 'none',
-    borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 500,
-    cursor: 'pointer', fontFamily: 'Outfit, sans-serif', whiteSpace: 'nowrap',
-  },
-  btnLogout: {
-    background: 'none', border: '1px solid var(--border)', color: 'var(--muted)',
-    borderRadius: 6, padding: '7px 14px', fontSize: 12, cursor: 'pointer',
-    fontFamily: 'Outfit, sans-serif',
-  },
-  btnDelete: {
-    background: 'none', border: '1px solid rgba(248,113,113,0.3)', color: '#f87171',
-    borderRadius: 6, padding: '5px 12px', fontSize: 11, cursor: 'pointer',
-    fontFamily: 'Outfit, sans-serif',
-  },
+  input: { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', color: 'var(--text)', fontSize: 13, fontFamily: 'Outfit, sans-serif', flex: 1, minWidth: 120, outline: 'none' },
+  btnGold: { background: GOLD, color: '#000', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'Outfit, sans-serif', whiteSpace: 'nowrap' },
+  btnLogout: { background: 'none', border: '1px solid var(--border)', color: 'var(--muted)', borderRadius: 6, padding: '7px 14px', fontSize: 12, cursor: 'pointer', fontFamily: 'Outfit, sans-serif' },
+  btnDelete: { background: 'none', border: '1px solid rgba(248,113,113,0.3)', color: '#f87171', borderRadius: 6, padding: '5px 12px', fontSize: 11, cursor: 'pointer', fontFamily: 'Outfit, sans-serif' },
   table: { width: '100%', borderCollapse: 'collapse' },
-  th: {
-    fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase',
-    color: 'var(--muted)', padding: '8px 12px', textAlign: 'left',
-    borderBottom: '1px solid var(--border)',
-  },
+  th: { fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid var(--border)' },
   tr: { borderBottom: '1px solid var(--dim)' },
   td: { padding: '14px 12px', fontSize: 13, color: 'var(--text)' },
-  badge: {
-    display: 'inline-block', fontSize: 11, fontWeight: 500,
-    padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border)',
-    background: 'var(--surface2)', color: 'var(--muted)',
-  },
-  slotRow: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '12px 16px', background: 'var(--surface2)',
-    border: '1px solid var(--border)', borderRadius: 8, fontSize: 13,
-  },
+  badge: { display: 'inline-block', fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--muted)' },
+  slotRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13 },
 }
