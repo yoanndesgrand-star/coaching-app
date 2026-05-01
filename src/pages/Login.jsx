@@ -101,16 +101,16 @@ export default function Login() {
             <div style={s.form}>
 
               {/* Prénom + Nom */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', overflow: 'hidden' }}>
                 <input
                   type="text" placeholder="Prénom" value={firstName}
                   onChange={e => setFirstName(e.target.value)} required
-                  style={{ ...s.input, flex: 1 }}
+                 style={{ ...s.input }}
                 />
                 <input
                   type="text" placeholder="Nom" value={lastName}
                   onChange={e => setLastName(e.target.value)} required
-                  style={{ ...s.input, flex: 1 }}
+                  style={{ ...s.input }}
                 />
               </div>
 
