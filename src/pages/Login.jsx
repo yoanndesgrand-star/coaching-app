@@ -101,7 +101,7 @@ export default function Login() {
             <div style={s.form}>
 
               {/* Prénom + Nom */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', boxSizing: 'border-box' }}>
                 <input
                   type="text" placeholder="Prénom" value={firstName}
                   onChange={e => setFirstName(e.target.value)} required
@@ -198,7 +198,7 @@ const s = {
     background: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(196,151,58,0.06), transparent 60%)',
   },
   card: {
-    width: '100%', maxWidth: 460,
+    padding: '48px 32px',
     background: 'var(--surface)', border: '1px solid var(--border)',
     borderRadius: 16, padding: '48px 40px',
   },
