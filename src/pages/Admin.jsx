@@ -118,7 +118,7 @@ export default function Admin({ profile }) {
                 <table style={s.table}>
                   <thead>
                     <tr>
-                      {['Nom', 'Email', 'Offre', 'Crédits', 'Inscrit le'].map(h => (
+                      {['Nom', 'Email', 'Téléphone', 'Type', 'Offre', 'Crédits', 'Inscrit le'].map(h => (
                         <th key={h} style={s.th}>{h}</th>
                       ))}
                     </tr>
@@ -128,6 +128,12 @@ export default function Admin({ profile }) {
                       <tr key={c.id} style={s.tr}>
                         <td style={s.td}>{c.full_name || '—'}</td>
                         <td style={s.td}>{c.email}</td>
+                        <td style={s.td}>{c.phone || '—'}</td>
+                        <td style={s.td}>
+                          <span style={{ ...s.badge, color: c.coaching_type === 'domicile' ? '#60a5fa' : '#a78bfa' }}>
+                            {c.coaching_type === 'salle' ? '🏋️ Salle' : c.coaching_type === 'domicile' ? '🏠 Domicile' : '—'}
+                          </span>
+                        </td>
                         <td style={s.td}><span style={s.badge}>{c.offer_label || '—'}</span></td>
                         <td style={s.td}><strong style={{ color: c.credits > 0 ? GOLD : '#f87171' }}>{c.credits || 0}</strong></td>
                         <td style={s.td}>{new Date(c.created_at).toLocaleDateString('fr-FR')}</td>
