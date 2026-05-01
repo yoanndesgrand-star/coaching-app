@@ -111,3 +111,12 @@ create trigger on_auth_user_created
 -- 5. CRÉER TON COMPTE ADMIN
 -- Après avoir créé ton compte via le site, colle ton User ID ici :
 -- update public.profiles set is_admin = true where email = 'ton@email.com';
+
+-- ══════════════════════════════════════
+-- MISE À JOUR — Onboarding client
+-- À coller dans l'éditeur SQL de Supabase
+-- ══════════════════════════════════════
+
+-- Ajouter les colonnes manquantes
+alter table public.profiles add column if not exists phone text;
+alter table public.profiles add column if not exists coaching_type text; -- 'salle' | 'domicile'
