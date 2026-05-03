@@ -55,7 +55,7 @@ export default async function handler(req, res) {
             ? (profile.address || 'Domicile client')
             : 'ON AIR BNF, 93 avenue de France, 75013 Paris'
 
-      await calendar.events.insert({
+      const gcalEvent = await calendar.events.insert({
         calendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
         requestBody: {
           summary: 'YD Coaching - ' + (profile.full_name || profile.email),
@@ -65,6 +65,11 @@ export default async function handler(req, res) {
           description: (profile.coaching_type === 'domicile' ? '🏠 Coaching à domicile' : '🏋️ Coaching en salle') + '\n' + profile.email
         }
       })
+
+      // Stocker l'ID Google Calendar dans la réservation
+      if (gcalEvent?.data?.id) {
+        await supabase.from('bookings').update({ google_event_id: gcalEvent.data.id }).eq('id', booking.id)
+      }
     }
   } catch (e) {
     console.error('Google Calendar:', e.message)

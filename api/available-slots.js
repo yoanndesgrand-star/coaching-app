@@ -57,7 +57,7 @@ export default async function handler(req, res) {
     const openingHours = ohRes.data || []
     const settings = stRes.data || { session_duration: 60, buffer_time: 10, slot_increment: 60 }
     const blockedPeriods = bpRes.data || []
-    const confirmedBookings = bookRes.data || []
+    let confirmedBookings = bookRes.data || []
     const clientProfile = clientRes.data
 
     const sessionMs = (settings.session_duration || 60) * 60 * 1000
@@ -89,9 +89,39 @@ export default async function handler(req, res) {
           calendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
           timeMin: startDate.toISOString(),
           timeMax: new Date(targetYear, targetMonth, 1).toISOString(),
-          singleEvents: true
+          singleEvents: true,
+          showDeleted: true
         })
-        googleBusy = (eventsRes.data.items || [])
+
+        const allEvents = eventsRes.data.items || []
+
+        // Sync : détecter les événements supprimés → annuler les réservations correspondantes
+        const cancelledGcalEvents = allEvents.filter(e => e.status === 'cancelled' && e.id)
+        const cancelledBookingIds = new Set()
+        for (const event of cancelledGcalEvents) {
+          const { data: bookingToCancel } = await supabase
+            .from('bookings')
+            .select('id, client_id, slot_id')
+            .eq('google_event_id', event.id)
+            .eq('status', 'confirmed')
+            .single()
+
+          if (bookingToCancel) {
+            await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingToCancel.id)
+            await supabase.from('time_slots').update({ is_available: true }).eq('id', bookingToCancel.slot_id)
+            const { data: p } = await supabase.from('profiles').select('credits').eq('id', bookingToCancel.client_id).single()
+            if (p) await supabase.from('profiles').update({ credits: (p.credits || 0) + 1 }).eq('id', bookingToCancel.client_id)
+            cancelledBookingIds.add(bookingToCancel.id)
+            console.log('Auto-cancelled booking', bookingToCancel.id, 'from deleted Google event', event.id)
+          }
+        }
+
+        // Retirer les réservations annulées de la liste
+        if (cancelledBookingIds.size > 0) {
+          confirmedBookings = confirmedBookings.filter(b => !cancelledBookingIds.has(b.id))
+        }
+
+        googleBusy = allEvents
           .filter(e => e.start?.dateTime && e.status !== 'cancelled')
           .map(e => ({ 
             start: new Date(e.start.dateTime), 
