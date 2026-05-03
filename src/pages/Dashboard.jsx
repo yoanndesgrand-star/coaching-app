@@ -12,6 +12,17 @@ const STRIPE = {
   pack10:     'https://buy.stripe.com/dRm9ASh2RgPo5wOaZE5Rm02',
 }
 
+
+const SUBSCRIPTIONS = {
+  presentiel:                 { label: 'Présentiel',                    price: null,      hasOnline: false },
+  sport_online:               { label: 'Sport en ligne',                 price: 59,        hasOnline: true  },
+  nutrition:                  { label: 'Nutrition',                      price: 119,       hasOnline: true  },
+  sport_nutrition:            { label: 'Sport + Nutrition',              price: 149,       hasOnline: true  },
+  presentiel_sport:           { label: 'Présentiel + Sport',             price: 59,        hasOnline: true  },
+  presentiel_nutrition:       { label: 'Présentiel + Nutrition',         price: 119,       hasOnline: true  },
+  presentiel_sport_nutrition: { label: 'Présentiel + Sport + Nutrition', price: 149,       hasOnline: true  },
+}
+
 export default function Dashboard({ profile, setProfile }) {
   const [bookings, setBookings] = useState([])
   const [msg, setMsg] = useState(null)
@@ -70,35 +81,62 @@ export default function Dashboard({ profile, setProfile }) {
         )}
 
         {/* STATS */}
-        <div style={s.statsGrid}>
-          <div style={s.statCard}>
-            <div style={s.statLabel}>Crédits</div>
-            <div style={{ ...s.statValue, color: profile.credits > 0 ? GOLD : '#f87171' }}>{profile.credits}</div>
-            <div style={s.statSub}>séances dispo</div>
-          </div>
-          <div style={{ ...s.statCard, flex: 2 }}>
-            <div style={s.statLabel}>Prochaine séance</div>
-            {nextBooking ? (
-              <>
-                <div style={{ fontSize: 18, fontWeight: 500, margin: '8px 0 4px' }}>{formatDate(nextBooking.time_slots.start_time)}</div>
-                <div style={s.statSub}>{formatTime(nextBooking.time_slots.start_time)} — ON AIR BNF Paris 13e</div>
-                <button onClick={() => cancelBooking(nextBooking)} disabled={cancelling === nextBooking.id} style={s.btnCancel}>
-                  {cancelling === nextBooking.id ? '…' : 'Annuler (si > 12h avant)'}
-                </button>
-              </>
-            ) : (
-              <>
-                <div style={{ fontSize: 13, color: 'var(--muted)', margin: '12px 0' }}>Aucune séance prévue</div>
-                <button onClick={openCalendly} style={s.btnGold}>📅 Réserver une séance</button>
-              </>
-            )}
-          </div>
-          <div style={s.statCard}>
-            <div style={s.statLabel}>Mon offre</div>
-            <div style={{ fontSize: 14, fontWeight: 500, margin: '8px 0' }}>{profile.offer_label || 'Coaching'}</div>
-            {isAbonne && <div style={{ fontSize: 11, color: GOLD, background: 'rgba(196,151,58,0.1)', padding: '4px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4 }}>⭐ Tarif abonné</div>}
-          </div>
-        </div>
+        {(() => {
+          const sub = SUBSCRIPTIONS[profile.subscription_type]
+          return (
+            <div style={s.statsGrid}>
+              {/* Crédits — seulement si présentiel */}
+              {(!profile.subscription_type || profile.subscription_type.includes('presentiel')) && (
+                <div style={s.statCard}>
+                  <div style={s.statLabel}>Crédits</div>
+                  <div style={{ ...s.statValue, color: profile.credits > 0 ? GOLD : '#f87171' }}>{profile.credits}</div>
+                  <div style={s.statSub}>séances dispo</div>
+                </div>
+              )}
+
+              {/* Prochaine séance */}
+              <div style={{ ...s.statCard, flex: 2 }}>
+                <div style={s.statLabel}>Prochaine séance</div>
+                {nextBooking ? (
+                  <>
+                    <div style={{ fontSize: 18, fontWeight: 500, margin: '8px 0 4px' }}>{formatDate(nextBooking.time_slots.start_time)}</div>
+                    <div style={s.statSub}>{formatTime(nextBooking.time_slots.start_time)} — ON AIR BNF Paris 13e</div>
+                    <button onClick={() => cancelBooking(nextBooking)} disabled={cancelling === nextBooking.id} style={s.btnCancel}>
+                      {cancelling === nextBooking.id ? '…' : 'Annuler (si > 12h avant)'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 13, color: 'var(--muted)', margin: '12px 0' }}>Aucune séance prévue</div>
+                    <button onClick={openCalendly} style={s.btnGold}>📅 Réserver une séance</button>
+                  </>
+                )}
+              </div>
+
+              {/* Mon abonnement */}
+              <div style={s.statCard}>
+                <div style={s.statLabel}>Mon abonnement</div>
+                <div style={{ fontSize: 14, fontWeight: 500, margin: '8px 0' }}>{sub ? sub.label : 'Coaching'}</div>
+                {sub?.price && (
+                  <div style={{ fontSize: 26, fontWeight: 600, color: GOLD, fontFamily: 'Outfit, sans-serif', margin: '4px 0' }}>
+                    {sub.price}€<span style={{ fontSize: 13, fontWeight: 300, color: 'var(--muted)' }}>/mois</span>
+                  </div>
+                )}
+                {sub?.price && (
+                  <button
+                    onClick={() => {
+                      const msg = encodeURIComponent(`Bonjour Yoann, je souhaite résilier mon abonnement ${sub.label} à la fin du mois. Merci.`)
+                      window.open(`https://wa.me/33687207855?text=${msg}`, '_blank')
+                    }}
+                    style={{ ...s.btnCancel, marginTop: 12, fontSize: 11 }}
+                  >
+                    Résilier mon abonnement
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* RÉSERVER avec crédits */}
         {(profile.credits > 0 || isAbonne) && (

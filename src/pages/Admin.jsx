@@ -3,6 +3,16 @@ import { supabase } from '../lib/supabase'
 
 const GOLD = '#C4973A'
 
+const SUBSCRIPTION_TYPES = [
+  { value: 'presentiel',              label: '🏋️ Présentiel seul',              price: null },
+  { value: 'sport_online',            label: '📱 Sport en ligne',                price: '59€/mois' },
+  { value: 'nutrition',               label: '🥗 Nutrition',                     price: '119€/mois' },
+  { value: 'sport_nutrition',         label: '💪 Sport + Nutrition',             price: '149€/mois' },
+  { value: 'presentiel_sport',        label: '🏋️📱 Présentiel + Sport',          price: 'crédits + 59€/mois' },
+  { value: 'presentiel_nutrition',    label: '🏋️🥗 Présentiel + Nutrition',      price: 'crédits + 119€/mois' },
+  { value: 'presentiel_sport_nutrition', label: '🏋️💪 Présentiel + Sport + Nutrition', price: 'crédits + 149€/mois' },
+]
+
 export default function Admin({ profile }) {
   const [clients, setClients] = useState([])
   const [bookings, setBookings] = useState([])
@@ -12,7 +22,7 @@ export default function Admin({ profile }) {
   const [msg, setMsg] = useState(null)
 
   const [newSlot, setNewSlot] = useState({ date: '', time: '', duration: 60 })
-  const [creditForm, setCreditForm] = useState({ clientId: '', amount: 1, label: '' })
+  const [creditForm, setCreditForm] = useState({ clientId: '', amount: 1 })
 
   useEffect(() => { loadAll() }, [])
 
@@ -34,11 +44,21 @@ export default function Admin({ profile }) {
     const client = clients.find(c => c.id === creditForm.clientId)
     const newCredits = (client.credits || 0) + parseInt(creditForm.amount)
     const { error } = await supabase.from('profiles')
-      .update({ credits: newCredits, offer_label: creditForm.label || client.offer_label })
+      .update({ credits: newCredits })
       .eq('id', creditForm.clientId)
     if (!error) {
       setMsg({ type: 'success', text: `${parseInt(creditForm.amount)} crédit(s) ajouté(s) à ${client.full_name || client.email}` })
-      setCreditForm({ clientId: '', amount: 1, label: '' })
+      setCreditForm({ clientId: '', amount: 1 })
+      loadAll()
+    }
+  }
+
+  async function updateSubscription(clientId, subscriptionType) {
+    const { error } = await supabase.from('profiles')
+      .update({ subscription_type: subscriptionType })
+      .eq('id', clientId)
+    if (!error) {
+      setMsg({ type: 'success', text: 'Abonnement mis à jour.' })
       loadAll()
     }
   }
@@ -99,6 +119,7 @@ export default function Admin({ profile }) {
 
         {tab === 'clients' && (
           <div>
+            {/* Ajouter crédits */}
             <div style={s.card}>
               <div style={s.cardTitle}>Ajouter des crédits</div>
               <div style={s.formRow}>
@@ -106,44 +127,67 @@ export default function Admin({ profile }) {
                   <option value="">Sélectionner un client</option>
                   {clients.map(c => <option key={c.id} value={c.id}>{c.full_name || c.email} ({c.credits || 0} crédits)</option>)}
                 </select>
-                <input type="number" min="1" max="20" value={creditForm.amount} onChange={e => setCreditForm(f => ({ ...f, amount: e.target.value }))} style={{ ...s.input, width: 80 }} placeholder="Nbr" />
-                <input type="text" value={creditForm.label} onChange={e => setCreditForm(f => ({ ...f, label: e.target.value }))} style={s.input} placeholder="Offre (ex: Pack 10)" />
+                <input type="number" min="1" max="20" value={creditForm.amount} onChange={e => setCreditForm(f => ({ ...f, amount: e.target.value }))} style={{ ...s.input, flex: 'none', width: 80 }} placeholder="Nbr" />
                 <button onClick={addCredits} style={s.btnGold}>Ajouter</button>
               </div>
             </div>
 
+            {/* Liste clients */}
             <div style={s.card}>
               <div style={s.cardTitle}>Tous les clients</div>
               {loading ? <div style={{ color: 'var(--muted)', fontSize: 13 }}>Chargement…</div> : (
-                <table style={s.table}>
-                  <thead>
-                    <tr>
-                      {['Nom', 'Email', 'Téléphone', 'Type', 'Offre', 'Crédits', 'Inscrit le', ''].map(h => (
-                        <th key={h} style={s.th}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {clients.map(c => (
-                      <tr key={c.id} style={s.tr}>
-                        <td style={s.td}>{c.full_name || '—'}</td>
-                        <td style={s.td}>{c.email}</td>
-                        <td style={s.td}>{c.phone || '—'}</td>
-                        <td style={s.td}>
-                          <span style={{ ...s.badge, color: c.coaching_type === 'domicile' ? '#60a5fa' : '#a78bfa' }}>
-                            {c.coaching_type === 'salle' ? '🏋️ Salle' : c.coaching_type === 'domicile' ? '🏠 Domicile' : '—'}
-                          </span>
-                        </td>
-                        <td style={s.td}><span style={s.badge}>{c.offer_label || '—'}</span></td>
-                        <td style={s.td}><strong style={{ color: c.credits > 0 ? GOLD : '#f87171' }}>{c.credits || 0}</strong></td>
-                        <td style={s.td}>{new Date(c.created_at).toLocaleDateString('fr-FR')}</td>
-                        <td style={s.td}>
-                          <button onClick={() => deleteClient(c.id, c.full_name || c.email)} style={s.btnDelete}>Supprimer</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {clients.map(c => {
+                    const sub = SUBSCRIPTION_TYPES.find(s => s.value === c.subscription_type)
+                    return (
+                      <div key={c.id} style={s.clientRow}>
+                        <div style={s.clientInfo}>
+                          <div style={s.clientName}>{c.full_name || '—'}</div>
+                          <div style={s.clientEmail}>{c.email}</div>
+                          {c.phone && <div style={s.clientEmail}>{c.phone}</div>}
+                        </div>
+
+                        {/* Type de coaching */}
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                          {c.coaching_type === 'salle' ? '🏋️ Salle' : c.coaching_type === 'domicile' ? '🏠 Domicile' : '—'}
+                        </div>
+
+                        {/* Abonnement */}
+                        <div style={{ minWidth: 240 }}>
+                          <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Abonnement</div>
+                          <select
+                            value={c.subscription_type || ''}
+                            onChange={e => updateSubscription(c.id, e.target.value)}
+                            style={{ ...s.input, fontSize: 12, padding: '8px 10px' }}
+                          >
+                            <option value="">— Aucun —</option>
+                            {SUBSCRIPTION_TYPES.map(st => (
+                              <option key={st.value} value={st.value}>{st.label}{st.price ? ` — ${st.price}` : ''}</option>
+                            ))}
+                          </select>
+                          {sub?.price && (
+                            <div style={{ fontSize: 11, color: GOLD, marginTop: 4 }}>{sub.price}</div>
+                          )}
+                        </div>
+
+                        {/* Crédits */}
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Crédits</div>
+                          <strong style={{ color: c.credits > 0 ? GOLD : '#f87171', fontSize: 22 }}>{c.credits || 0}</strong>
+                        </div>
+
+                        {/* Inscrit le */}
+                        <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
+                          <div style={{ marginBottom: 4 }}>Inscrit le</div>
+                          {new Date(c.created_at).toLocaleDateString('fr-FR')}
+                        </div>
+
+                        {/* Supprimer */}
+                        <button onClick={() => deleteClient(c.id, c.full_name || c.email)} style={s.btnDelete}>Supprimer</button>
+                      </div>
+                    )
+                  })}
+                </div>
               )}
             </div>
           </div>
@@ -154,9 +198,7 @@ export default function Admin({ profile }) {
             <div style={s.cardTitle}>Toutes les réservations</div>
             <table style={s.table}>
               <thead>
-                <tr>
-                  {['Client', 'Date', 'Heure', 'Statut'].map(h => <th key={h} style={s.th}>{h}</th>)}
-                </tr>
+                <tr>{['Client', 'Date', 'Heure', 'Statut'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr>
               </thead>
               <tbody>
                 {bookings.map(b => (
@@ -165,7 +207,7 @@ export default function Admin({ profile }) {
                     <td style={s.td}>{b.time_slots ? new Date(b.time_slots.start_time).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '—'}</td>
                     <td style={s.td}>{b.time_slots ? new Date(b.time_slots.start_time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
                     <td style={s.td}>
-                      <span style={{ ...s.badge, background: b.status === 'confirmed' ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)', color: b.status === 'confirmed' ? '#4ade80' : '#f87171', borderColor: b.status === 'confirmed' ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.3)' }}>
+                      <span style={{ ...s.badge, ...(b.status === 'confirmed' ? { color: '#4ade80', background: 'rgba(74,222,128,0.1)', borderColor: 'rgba(74,222,128,0.3)' } : { color: '#f87171', background: 'rgba(248,113,113,0.1)', borderColor: 'rgba(248,113,113,0.3)' }) }}>
                         {b.status === 'confirmed' ? 'Confirmé' : 'Annulé'}
                       </span>
                     </td>
@@ -204,14 +246,12 @@ export default function Admin({ profile }) {
                       <span style={{ ...s.badge, ...(sl.is_available ? { color: '#4ade80', background: 'rgba(74,222,128,0.1)', borderColor: 'rgba(74,222,128,0.3)' } : { color: '#f87171', background: 'rgba(248,113,113,0.1)', borderColor: 'rgba(248,113,113,0.3)' }) }}>
                         {sl.is_available ? 'Disponible' : 'Réservé'}
                       </span>
-                      {sl.is_available && (
-                        <button onClick={() => deleteSlot(sl.id)} style={s.btnDelete}>Supprimer</button>
-                      )}
+                      {sl.is_available && <button onClick={() => deleteSlot(sl.id)} style={s.btnDelete}>Supprimer</button>}
                     </div>
                   </div>
                 ))}
                 {slots.filter(sl => new Date(sl.start_time) > new Date()).length === 0 && (
-                  <div style={{ color: 'var(--muted)', fontSize: 13, padding: '16px 0' }}>Aucun créneau à venir. Ajoute-en un ci-dessus.</div>
+                  <div style={{ color: 'var(--muted)', fontSize: 13, padding: '16px 0' }}>Aucun créneau à venir.</div>
                 )}
               </div>
             </div>
@@ -225,18 +265,22 @@ export default function Admin({ profile }) {
 const s = {
   nav: { position: 'sticky', top: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 32px', background: 'rgba(8,8,8,0.95)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--border)' },
   navLogo: { fontFamily: 'Cormorant Garamond, serif', fontSize: 18 },
-  container: { maxWidth: 1000, margin: '0 auto', padding: '32px 24px' },
+  container: { maxWidth: 1100, margin: '0 auto', padding: '32px 24px' },
   msgBox: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderRadius: 8, border: '1px solid', fontSize: 13, marginBottom: 24 },
   tabs: { display: 'flex', gap: 8, marginBottom: 24 },
   tab: { background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)', borderRadius: 8, padding: '10px 20px', fontSize: 13, cursor: 'pointer', fontFamily: 'Outfit, sans-serif', transition: 'all 0.2s' },
-  tabActive: { borderColor: GOLD, color: GOLD, background: 'rgba(196,151,58,0.08)' },
+  tabActive: { borderColor: '#C4973A', color: '#C4973A', background: 'rgba(196,151,58,0.08)' },
   card: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '24px', marginBottom: 16 },
-  cardTitle: { fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase', color: GOLD, marginBottom: 20 },
+  cardTitle: { fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#C4973A', marginBottom: 20 },
   formRow: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' },
   input: { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', color: 'var(--text)', fontSize: 13, fontFamily: 'Outfit, sans-serif', flex: 1, minWidth: 120, outline: 'none' },
-  btnGold: { background: GOLD, color: '#000', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'Outfit, sans-serif', whiteSpace: 'nowrap' },
+  btnGold: { background: '#C4973A', color: '#000', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'Outfit, sans-serif', whiteSpace: 'nowrap' },
   btnLogout: { background: 'none', border: '1px solid var(--border)', color: 'var(--muted)', borderRadius: 6, padding: '7px 14px', fontSize: 12, cursor: 'pointer', fontFamily: 'Outfit, sans-serif' },
   btnDelete: { background: 'none', border: '1px solid rgba(248,113,113,0.3)', color: '#f87171', borderRadius: 6, padding: '5px 12px', fontSize: 11, cursor: 'pointer', fontFamily: 'Outfit, sans-serif' },
+  clientRow: { display: 'flex', alignItems: 'center', gap: 20, padding: '20px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, flexWrap: 'wrap' },
+  clientInfo: { flex: 1, minWidth: 160 },
+  clientName: { fontSize: 14, fontWeight: 500, marginBottom: 4 },
+  clientEmail: { fontSize: 12, color: 'var(--muted)' },
   table: { width: '100%', borderCollapse: 'collapse' },
   th: { fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid var(--border)' },
   tr: { borderBottom: '1px solid var(--dim)' },
