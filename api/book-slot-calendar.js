@@ -11,9 +11,9 @@ export default async function handler(req, res) {
   const { clientId, startTime, endTime } = req.body
   if (!clientId || !startTime || !endTime) return res.status(400).json({ error: 'Paramètres manquants' })
 
-  // Vérifier crédits
+  // Vérifier crédits + infos coaching
   const { data: profile } = await supabase
-    .from('profiles').select('credits, full_name, email').eq('id', clientId).single()
+    .from('profiles').select('credits, full_name, email, coaching_type, address').eq('id', clientId).single()
 
   if (!profile || (profile.credits || 0) < 1)
     return res.status(400).json({ error: 'Aucun crédit disponible' })
@@ -51,13 +51,18 @@ export default async function handler(req, res) {
         expiry_date: tokenData.expiry_date
       })
       const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
+      const eventLocation = profile.coaching_type === 'domicile'
+            ? (profile.address || 'Domicile client')
+            : 'ON AIR BNF, 93 avenue de France, 75013 Paris'
+
       await calendar.events.insert({
         calendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
         requestBody: {
           summary: 'YD Coaching - ' + (profile.full_name || profile.email),
+          location: eventLocation,
           start: { dateTime: startTime },
           end: { dateTime: endTime },
-          description: 'Réservé via app — ' + profile.email
+          description: (profile.coaching_type === 'domicile' ? '🏠 Coaching à domicile' : '🏋️ Coaching en salle') + '\n' + profile.email
         }
       })
     }
