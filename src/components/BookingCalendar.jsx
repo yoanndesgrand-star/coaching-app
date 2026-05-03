@@ -48,6 +48,21 @@ export default function BookingCalendar({ profile, onBooked }) {
       if (data.success) {
         onBooked(data.creditsLeft)
         loadSlots()
+
+        // Envoyer email de confirmation (silencieux, ne bloque pas)
+        fetch('/api/send-confirmation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: profile.email,
+            fullName: profile.full_name,
+            date: formatDateTime(slot.start),
+            time: formatTime(slot.start),
+            location: clientLocation,
+            creditsLeft: data.creditsLeft,
+            coachingType: profile.coaching_type
+          })
+        }).catch(() => {})
       } else {
         alert(data.error || 'Erreur lors de la réservation')
       }

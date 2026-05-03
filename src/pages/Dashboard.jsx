@@ -167,9 +167,22 @@ export default function Dashboard({ profile, setProfile }) {
               <>
                 <div style={{ fontSize: 18, fontWeight: 500, margin: '8px 0 4px' }}>{formatDate(nextBooking.time_slots.start_time)}</div>
                 <div style={s.statSub}>{formatTime(nextBooking.time_slots.start_time)} — {profile.coaching_type === 'domicile' ? 'À domicile' : 'ON AIR BNF Paris 13e'}</div>
-                <button onClick={() => cancelBooking(nextBooking)} disabled={cancelling === nextBooking.id} style={s.btnCancel}>
-                  {cancelling === nextBooking.id ? '...' : 'Annuler (si > 24h avant)'}
-                </button>
+                {(new Date(nextBooking.time_slots.start_time) - new Date()) / 3600000 >= 24 ? (
+                  <button onClick={() => cancelBooking(nextBooking)} disabled={cancelling === nextBooking.id} style={s.btnCancel}>
+                    {cancelling === nextBooking.id ? '...' : 'Annuler ma séance'}
+                  </button>
+                ) : (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 11, color: '#f87171', marginBottom: 6 }}>Annulation impossible — moins de 24h</div>
+                    <a
+                      href={WHATSAPP + '?text=' + encodeURIComponent('Bonjour Yoann, je ne pourrai malheureusement pas être présent(e) à ma séance du ' + formatDate(nextBooking.time_slots.start_time) + ' à ' + formatTime(nextBooking.time_slots.start_time) + '. Voici la raison : ')}
+                      target="_blank"
+                      style={{ ...s.btnCancel, textDecoration: 'none', display: 'inline-block', textAlign: 'center' }}
+                    >
+                      Contacter Yoann
+                    </a>
+                  </div>
+                )}
               </>
             ) : (
               <div style={{ fontSize: 13, color: 'var(--muted)', margin: '12px 0' }}>Aucune séance prévue</div>
