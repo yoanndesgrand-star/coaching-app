@@ -19,6 +19,7 @@ export default function BookingCalendar({ profile, onBooked }) {
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState(null)
   const [booking, setBooking] = useState(null)
+  const [confirmSlot, setConfirmSlot] = useState(null)
 
   useEffect(() => { loadSlots() }, [year, month])
 
@@ -36,6 +37,7 @@ export default function BookingCalendar({ profile, onBooked }) {
   async function bookSlot(slot) {
     if (booking) return
     setBooking(slot.start)
+    setConfirmSlot(null)
     try {
       const res = await fetch('/api/book-slot-calendar', {
         method: 'POST',
@@ -52,6 +54,21 @@ export default function BookingCalendar({ profile, onBooked }) {
     } catch (e) { alert('Erreur de connexion') }
     setBooking(null)
   }
+
+  function formatDateTime(iso) {
+    const d = new Date(iso)
+    const DAYS = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi']
+    const MONTHS_FULL = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre']
+    return DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS_FULL[d.getMonth()]
+  }
+
+  function isLessThan24h(iso) {
+    return (new Date(iso) - new Date()) < 24 * 60 * 60 * 1000
+  }
+
+  const clientLocation = profile.coaching_type === 'domicile'
+    ? (profile.address || 'À domicile')
+    : 'ON AIR BNF — 93 av. de France, Paris 13e'
 
   const firstDay = new Date(year, month - 1, 1).getDay()
   const daysInMonth = new Date(year, month, 0).getDate()
@@ -134,7 +151,7 @@ export default function BookingCalendar({ profile, onBooked }) {
                     return (
                       <button
                         key={slot.start}
-                        onClick={() => bookSlot(slot)}
+                        onClick={() => setConfirmSlot(slot)}
                         disabled={booking === slot.start}
                         style={{
                           background: booking === slot.start ? 'var(--surface2)' : color.bg,
@@ -189,6 +206,54 @@ export default function BookingCalendar({ profile, onBooked }) {
             </div>
           )}
         </>
+      )}
+
+      {/* MODAL CONFIRMATION */}
+      {confirmSlot && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }} onClick={() => setConfirmSlot(null)}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '32px 28px', maxWidth: 400, width: '90%' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 22, marginBottom: 24, textAlign: 'center' }}>Confirmer la réservation</div>
+
+            <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 6 }}>
+                📅 {formatDateTime(confirmSlot.start)} à {formatTime(confirmSlot.start)}
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--muted)' }}>
+                📍 {clientLocation}
+              </div>
+            </div>
+
+            <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.7, marginBottom: 8 }}>
+              <strong style={{ color: 'var(--text)' }}>Conditions d'annulation :</strong>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.7, marginBottom: 20 }}>
+              • Annulation gratuite jusqu'à <strong style={{ color: 'var(--text)' }}>24h avant</strong> la séance (crédit restitué).<br />
+              • Passé ce délai, la séance est due et le crédit ne sera pas remboursé.
+            </div>
+
+            {isLessThan24h(confirmSlot.start) && (
+              <div style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#f87171', marginBottom: 16 }}>
+                ⚠️ Ce créneau est dans moins de 24h — l'annulation sera impossible une fois confirmé.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setConfirmSlot(null)}
+                style={{ flex: 1, background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', borderRadius: 8, padding: '13px', fontSize: 13, cursor: 'pointer', fontFamily: 'Outfit, sans-serif' }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => bookSlot(confirmSlot)}
+                disabled={!!booking}
+                style={{ flex: 1, background: '#C4973A', color: '#000', border: 'none', borderRadius: 8, padding: '13px', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'Outfit, sans-serif' }}
+              >
+                {booking ? 'Réservation...' : 'Confirmer'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

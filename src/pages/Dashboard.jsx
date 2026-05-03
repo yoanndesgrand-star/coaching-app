@@ -42,7 +42,7 @@ export default function Dashboard({ profile, setProfile }) {
   const [editAddress, setEditAddress] = useState(profile.address || '')
   const [savingSettings, setSavingSettings] = useState(false)
 
-  const sub = SUBSCRIPTIONS[profile.subscription_type] || null
+  const sub = SUBSCRIPTIONS[profile.subscription_type] || SUBSCRIPTIONS[profile.coaching_type] || null
   const hasPresentiel = !profile.subscription_type || sub?.hasPresentiel || profile.subscription_type === 'domicile'
   const hasOnline = sub?.hasOnline || false
   const isAbonne = hasOnline
@@ -166,7 +166,7 @@ export default function Dashboard({ profile, setProfile }) {
             {nextBooking ? (
               <>
                 <div style={{ fontSize: 18, fontWeight: 500, margin: '8px 0 4px' }}>{formatDate(nextBooking.time_slots.start_time)}</div>
-                <div style={s.statSub}>{formatTime(nextBooking.time_slots.start_time)} — ON AIR BNF Paris 13e</div>
+                <div style={s.statSub}>{formatTime(nextBooking.time_slots.start_time)} — {profile.coaching_type === 'domicile' ? 'À domicile' : 'ON AIR BNF Paris 13e'}</div>
                 <button onClick={() => cancelBooking(nextBooking)} disabled={cancelling === nextBooking.id} style={s.btnCancel}>
                   {cancelling === nextBooking.id ? '...' : 'Annuler (si > 24h avant)'}
                 </button>
@@ -350,7 +350,7 @@ export default function Dashboard({ profile, setProfile }) {
               <div key={b.id} style={{ ...s.bookingRow, marginBottom: 8 }}>
                 <div>
                   <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 2 }}>{formatDate(b.time_slots.start_time)}</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{formatTime(b.time_slots.start_time)} — ON AIR BNF Paris 13e</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{formatTime(b.time_slots.start_time)} — {profile.coaching_type === 'domicile' ? 'À domicile' : 'ON AIR BNF Paris 13e'}</div>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 4, border: '1px solid rgba(74,222,128,0.3)', background: 'rgba(74,222,128,0.1)', color: '#4ade80' }}>Confirmé</span>
               </div>
@@ -366,7 +366,7 @@ export default function Dashboard({ profile, setProfile }) {
               <div key={b.id} style={{ ...s.bookingRow, marginBottom: 8, opacity: 0.7 }}>
                 <div>
                   <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 2 }}>{b.time_slots ? formatDate(b.time_slots.start_time) : 'Séance passée'}</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{b.time_slots ? formatTime(b.time_slots.start_time) + ' — ON AIR BNF' : ''}</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{b.time_slots ? formatTime(b.time_slots.start_time) + (profile.coaching_type === 'domicile' ? ' — À domicile' : ' — ON AIR BNF') : ''}</div>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--muted)' }}>Passée</span>
               </div>
