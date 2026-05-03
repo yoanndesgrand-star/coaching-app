@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 
 const GOLD = '#C4973A'
 const CALENDLY_URL = 'https://calendly.com/contact-yoanndesgrand/coaching'
+const WHATSAPP = 'https://wa.me/33687207855'
 
 const STRIPE = {
   seance_60:  'https://buy.stripe.com/28E5kCcMB9mWaR8d7M5Rm00',
@@ -12,15 +13,14 @@ const STRIPE = {
   pack10:     'https://buy.stripe.com/dRm9ASh2RgPo5wOaZE5Rm02',
 }
 
-
 const SUBSCRIPTIONS = {
-  presentiel:                 { label: 'Présentiel',                    price: null,      hasOnline: false },
-  sport_online:               { label: 'Sport en ligne',                 price: 59,        hasOnline: true  },
-  nutrition:                  { label: 'Nutrition',                      price: 119,       hasOnline: true  },
-  sport_nutrition:            { label: 'Sport + Nutrition',              price: 149,       hasOnline: true  },
-  presentiel_sport:           { label: 'Présentiel + Sport',             price: 59,        hasOnline: true  },
-  presentiel_nutrition:       { label: 'Présentiel + Nutrition',         price: 119,       hasOnline: true  },
-  presentiel_sport_nutrition: { label: 'Présentiel + Sport + Nutrition', price: 149,       hasOnline: true  },
+  presentiel:                 { label: 'Présentiel',                     price: null, hasPresentiel: true,  hasOnline: false },
+  sport_online:               { label: 'Sport en ligne',                  price: 59,   hasPresentiel: false, hasOnline: true  },
+  nutrition:                  { label: 'Nutrition',                       price: 119,  hasPresentiel: false, hasOnline: true  },
+  sport_nutrition:            { label: 'Sport + Nutrition',               price: 149,  hasPresentiel: false, hasOnline: true  },
+  presentiel_sport:           { label: 'Présentiel + Sport',              price: 59,   hasPresentiel: true,  hasOnline: true  },
+  presentiel_nutrition:       { label: 'Présentiel + Nutrition',          price: 119,  hasPresentiel: true,  hasOnline: true  },
+  presentiel_sport_nutrition: { label: 'Présentiel + Sport + Nutrition',  price: 149,  hasPresentiel: true,  hasOnline: true  },
 }
 
 export default function Dashboard({ profile, setProfile }) {
@@ -28,12 +28,12 @@ export default function Dashboard({ profile, setProfile }) {
   const [msg, setMsg] = useState(null)
   const [cancelling, setCancelling] = useState(null)
 
-  const isAbonne = (profile.offer_label || '').toLowerCase().includes('sport')
+  const sub = SUBSCRIPTIONS[profile.subscription_type] || null
+  const hasPresentiel = !profile.subscription_type || sub?.hasPresentiel
+  const hasOnline = sub?.hasOnline || false
+  const isAbonne = hasOnline
 
-  useEffect(() => {
-    loadBookings()
-
-  }, [])
+  useEffect(() => { loadBookings() }, [])
 
   async function loadBookings() {
     const { data } = await supabase
@@ -57,14 +57,12 @@ export default function Dashboard({ profile, setProfile }) {
     setCancelling(null)
   }
 
-  function openCalendly() {
-    window.open(CALENDLY_URL, '_blank')
-  }
-
   const nextBooking = bookings.find(b => b.time_slots && new Date(b.time_slots.start_time) > new Date())
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+
+      {/* NAV */}
       <nav style={s.nav}>
         <div style={s.navLogo}>Yoann <span style={{ color: GOLD }}>Desgrand</span></div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -74,136 +72,148 @@ export default function Dashboard({ profile, setProfile }) {
       </nav>
 
       <div style={s.container}>
+
+        {/* MESSAGE */}
         {msg && (
           <div style={{ ...s.msgBox, background: msg.type === 'success' ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)', borderColor: msg.type === 'success' ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.3)', color: msg.type === 'success' ? '#4ade80' : '#f87171' }}>
-            {msg.text}<button onClick={() => setMsg(null)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', marginLeft: 12 }}>×</button>
+            {msg.text}
+            <button onClick={() => setMsg(null)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', marginLeft: 12 }}>×</button>
           </div>
         )}
 
-        {/* STATS */}
-        {(() => {
-          const sub = SUBSCRIPTIONS[profile.subscription_type]
-          return (
-            <div style={s.statsGrid}>
-              {/* Crédits — seulement si présentiel */}
-              {(!profile.subscription_type || profile.subscription_type.includes('presentiel')) && (
-                <div style={s.statCard}>
-                  <div style={s.statLabel}>Crédits</div>
-                  <div style={{ ...s.statValue, color: profile.credits > 0 ? GOLD : '#f87171' }}>{profile.credits}</div>
-                  <div style={s.statSub}>séances dispo</div>
-                </div>
-              )}
+        {/* STATS GRID */}
+        <div style={{ display: 'grid', gridTemplateColumns: hasPresentiel ? '1fr 2fr 1fr' : '2fr 1fr', gap: 16, marginBottom: 16 }}>
 
-              {/* Prochaine séance */}
-              <div style={{ ...s.statCard, flex: 2 }}>
-                <div style={s.statLabel}>Prochaine séance</div>
-                {nextBooking ? (
-                  <>
-                    <div style={{ fontSize: 18, fontWeight: 500, margin: '8px 0 4px' }}>{formatDate(nextBooking.time_slots.start_time)}</div>
-                    <div style={s.statSub}>{formatTime(nextBooking.time_slots.start_time)} — ON AIR BNF Paris 13e</div>
-                    <button onClick={() => cancelBooking(nextBooking)} disabled={cancelling === nextBooking.id} style={s.btnCancel}>
-                      {cancelling === nextBooking.id ? '…' : 'Annuler (si > 12h avant)'}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div style={{ fontSize: 13, color: 'var(--muted)', margin: '12px 0' }}>Aucune séance prévue</div>
-                    <button onClick={openCalendly} style={s.btnGold}>📅 Réserver une séance</button>
-                  </>
-                )}
-              </div>
-
-              {/* Mon abonnement */}
-              <div style={s.statCard}>
-                <div style={s.statLabel}>Mon abonnement</div>
-                <div style={{ fontSize: 14, fontWeight: 500, margin: '8px 0' }}>{sub ? sub.label : 'Coaching'}</div>
-                {sub?.price && (
-                  <div style={{ fontSize: 26, fontWeight: 600, color: GOLD, fontFamily: 'Outfit, sans-serif', margin: '4px 0' }}>
-                    {sub.price}€<span style={{ fontSize: 13, fontWeight: 300, color: 'var(--muted)' }}>/mois</span>
-                  </div>
-                )}
-                {sub?.price && (
-                  <button
-                    onClick={() => {
-                      const msg = encodeURIComponent(`Bonjour Yoann, je souhaite résilier mon abonnement ${sub.label} à la fin du mois. Merci.`)
-                      window.open(`https://wa.me/33687207855?text=${msg}`, '_blank')
-                    }}
-                    style={{ ...s.btnCancel, marginTop: 12, fontSize: 11 }}
-                  >
-                    Résilier mon abonnement
-                  </button>
-                )}
-              </div>
-            </div>
-          )
-        })()}
-
-        {/* RÉSERVER avec crédits */}
-        {(profile.credits > 0 || isAbonne) && (
-          <div style={s.ctaBar}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Tu as {profile.credits} crédit{profile.credits > 1 ? 's' : ''} disponible{profile.credits > 1 ? 's' : ''}</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>Réserve sur le calendrier de Yoann</div>
-            </div>
-            <button onClick={openCalendly} style={s.btnGold}>📅 Réserver →</button>
-          </div>
-        )}
-
-        {/* OFFRES SÉANCES */}
-        <div style={s.section}>
-          <div style={s.sectionTitle}>Acheter des séances</div>
-          {isAbonne && (
-            <div style={{ fontSize: 12, color: GOLD, marginBottom: 20, padding: '8px 14px', background: 'rgba(196,151,58,0.08)', borderRadius: 6, border: '1px solid rgba(196,151,58,0.2)' }}>
-              ⭐ Tarif abonné Harmony — séances à 50€ au lieu de 60€
+          {/* Crédits — présentiel seulement */}
+          {hasPresentiel && (
+            <div style={s.statCard}>
+              <div style={s.statLabel}>Crédits</div>
+              <div style={{ ...s.statValue, color: profile.credits > 0 ? GOLD : '#f87171' }}>{profile.credits || 0}</div>
+              <div style={s.statSub}>séances disponibles</div>
             </div>
           )}
-          <div style={s.offresGrid}>
 
-            {/* Séance unique */}
-            <div style={s.offreCard}>
-              <div style={s.offreLabel}>À l'unité</div>
-              <div style={s.offreTitle}>Séance individuelle</div>
-              <div style={s.offrePrix}>
-                <span style={s.prixMain}>{isAbonne ? '50€' : '60€'}</span>
-                {isAbonne && <span style={s.prixBarre}>60€</span>}
-                <span style={s.prixPer}>/séance</span>
-              </div>
-              <a href={isAbonne ? STRIPE.seance_50 : STRIPE.seance_60} target="_blank" style={s.btnOffreGold}>Payer →</a>
-              <div style={s.offreNote}>ou espèces sur place</div>
-            </div>
+          {/* Prochaine séance */}
+          <div style={{ ...s.statCard }}>
+            <div style={s.statLabel}>Prochaine séance</div>
+            {nextBooking ? (
+              <>
+                <div style={{ fontSize: 18, fontWeight: 500, margin: '8px 0 4px' }}>{formatDate(nextBooking.time_slots.start_time)}</div>
+                <div style={s.statSub}>{formatTime(nextBooking.time_slots.start_time)} — ON AIR BNF Paris 13e</div>
+                <button onClick={() => cancelBooking(nextBooking)} disabled={cancelling === nextBooking.id} style={s.btnCancel}>
+                  {cancelling === nextBooking.id ? '…' : 'Annuler (si > 12h avant)'}
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 13, color: 'var(--muted)', margin: '12px 0' }}>Aucune séance prévue</div>
+                {hasPresentiel && (
+                  <button onClick={() => window.open(CALENDLY_URL, '_blank')} style={s.btnGold}>Réserver une séance</button>
+                )}
+              </>
+            )}
+          </div>
 
-            {/* Pack 5 */}
-            <div style={s.offreCard}>
-              <div style={s.offreLabel}>Pack 5 séances</div>
-              <div style={s.offreTitle}>Programme Court</div>
-              <div style={s.offrePrix}>
-                <span style={s.prixMain}>{isAbonne ? '250€' : '275€'}</span>
-                {isAbonne && <span style={s.prixBarre}>275€</span>}
-                <span style={s.prixPer}>{isAbonne ? '50€' : '55€'}/séance</span>
+          {/* Abonnement */}
+          <div style={s.statCard}>
+            <div style={s.statLabel}>Mon abonnement</div>
+            <div style={{ fontSize: 14, fontWeight: 500, margin: '8px 0' }}>{sub ? sub.label : 'Coaching'}</div>
+            {sub?.price && (
+              <div style={{ fontSize: 26, fontWeight: 600, color: GOLD, fontFamily: 'Outfit, sans-serif', margin: '4px 0' }}>
+                {sub.price}€<span style={{ fontSize: 13, fontWeight: 300, color: 'var(--muted)' }}>/mois</span>
               </div>
-              <div style={s.saving}>Économie {isAbonne ? '50€' : '25€'}</div>
-              <a href={isAbonne ? STRIPE.pack5_250 : STRIPE.pack5_275} target="_blank" style={s.btnOffreGold}>Acheter →</a>
-              <div style={s.offreNote}>valable 3 mois</div>
-            </div>
-
-            {/* Pack 10 */}
-            <div style={{ ...s.offreCard, borderColor: 'rgba(196,151,58,0.4)', background: 'linear-gradient(135deg, #161410 0%, var(--surface) 100%)', position: 'relative' }}>
-              <div style={{ position: 'absolute', top: -1, left: '50%', transform: 'translateX(-50%)', background: GOLD, color: '#000', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', padding: '3px 10px', borderRadius: '0 0 6px 6px' }}>
-                MEILLEURE OFFRE
-              </div>
-              <div style={s.offreLabel}>Pack 10 séances</div>
-              <div style={s.offreTitle}>Programme SHIFT</div>
-              <div style={s.offrePrix}>
-                <span style={s.prixMain}>500€</span>
-                <span style={s.prixPer}>50€/séance</span>
-              </div>
-              <div style={s.saving}>Économie 100€</div>
-              <a href={STRIPE.pack10} target="_blank" style={s.btnOffreGold}>Acheter →</a>
-              <div style={s.offreNote}>valable 6 mois</div>
-            </div>
-
+            )}
+            {sub?.price && (
+              <button
+                onClick={() => {
+                  const text = encodeURIComponent(`Bonjour Yoann, je souhaite résilier mon abonnement ${sub.label} à la fin du mois. Merci.`)
+                  window.open(`${WHATSAPP}?text=${text}`, '_blank')
+                }}
+                style={{ ...s.btnCancel, marginTop: 12, fontSize: 11 }}
+              >
+                Résilier mon abonnement
+              </button>
+            )}
           </div>
         </div>
+
+        {/* BARRE RÉSERVATION — présentiel avec crédits */}
+        {hasPresentiel && profile.credits > 0 && (
+          <div style={s.ctaBar}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>
+                Tu as {profile.credits} crédit{profile.credits > 1 ? 's' : ''} disponible{profile.credits > 1 ? 's' : ''}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--muted)' }}>Réserve sur le calendrier de Yoann</div>
+            </div>
+            <button onClick={() => window.open(CALENDLY_URL, '_blank')} style={s.btnGold}>Réserver →</button>
+          </div>
+        )}
+
+        {/* BARRE ZÉRO CRÉDIT — présentiel sans crédits */}
+        {hasPresentiel && !profile.credits && (
+          <div style={{ ...s.ctaBar, borderColor: 'rgba(248,113,113,0.2)', background: 'rgba(248,113,113,0.04)' }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4, color: '#f87171' }}>Aucun crédit disponible</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)' }}>Achète des séances ci-dessous pour réserver.</div>
+            </div>
+          </div>
+        )}
+
+        {/* ACHETER DES SÉANCES — présentiel seulement */}
+        {hasPresentiel && (
+          <div style={s.section}>
+            <div style={s.sectionTitle}>Acheter des séances</div>
+            {isAbonne && (
+              <div style={{ fontSize: 12, color: GOLD, marginBottom: 20, padding: '8px 14px', background: 'rgba(196,151,58,0.08)', borderRadius: 6, border: '1px solid rgba(196,151,58,0.2)' }}>
+                Tarif abonné — séances à 50€ au lieu de 60€
+              </div>
+            )}
+            <div style={s.offresGrid}>
+
+              <div style={s.offreCard}>
+                <div style={s.offreLabel}>À l'unité</div>
+                <div style={s.offreTitle}>Séance individuelle</div>
+                <div style={s.offrePrix}>
+                  <span style={s.prixMain}>{isAbonne ? '50€' : '60€'}</span>
+                  {isAbonne && <span style={s.prixBarre}>60€</span>}
+                  <span style={s.prixPer}>/séance</span>
+                </div>
+                <a href={isAbonne ? STRIPE.seance_50 : STRIPE.seance_60} target="_blank" style={s.btnOffreGold}>Payer →</a>
+                <div style={s.offreNote}>ou espèces sur place</div>
+              </div>
+
+              <div style={s.offreCard}>
+                <div style={s.offreLabel}>Pack 5 séances</div>
+                <div style={s.offreTitle}>Programme Court</div>
+                <div style={s.offrePrix}>
+                  <span style={s.prixMain}>{isAbonne ? '250€' : '275€'}</span>
+                  {isAbonne && <span style={s.prixBarre}>275€</span>}
+                  <span style={s.prixPer}>{isAbonne ? '50€' : '55€'}/séance</span>
+                </div>
+                <div style={s.saving}>Économie {isAbonne ? '50€' : '25€'}</div>
+                <a href={isAbonne ? STRIPE.pack5_250 : STRIPE.pack5_275} target="_blank" style={s.btnOffreGold}>Acheter →</a>
+                <div style={s.offreNote}>valable 3 mois</div>
+              </div>
+
+              <div style={{ ...s.offreCard, borderColor: 'rgba(196,151,58,0.4)', background: 'linear-gradient(135deg, #161410 0%, var(--surface) 100%)', position: 'relative' }}>
+                <div style={{ position: 'absolute', top: -1, left: '50%', transform: 'translateX(-50%)', background: GOLD, color: '#000', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', padding: '3px 10px', borderRadius: '0 0 6px 6px' }}>
+                  MEILLEURE OFFRE
+                </div>
+                <div style={s.offreLabel}>Pack 10 séances</div>
+                <div style={s.offreTitle}>Programme SHIFT</div>
+                <div style={s.offrePrix}>
+                  <span style={s.prixMain}>500€</span>
+                  <span style={s.prixPer}>50€/séance</span>
+                </div>
+                <div style={s.saving}>Économie 100€</div>
+                <a href={STRIPE.pack10} target="_blank" style={s.btnOffreGold}>Acheter →</a>
+                <div style={s.offreNote}>valable 6 mois</div>
+              </div>
+
+            </div>
+          </div>
+        )}
 
         {/* HISTORIQUE */}
         {bookings.length > 0 && (
@@ -227,7 +237,7 @@ export default function Dashboard({ profile, setProfile }) {
           <div>
             <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Une question ?</div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>Contacte Yoann directement sur WhatsApp.</div>
-            <a href="https://wa.me/33687207855?text=Bonjour%20Yoann%2C%20j%27ai%20une%20question." target="_blank" style={s.btnGold}>Envoyer un message</a>
+            <a href={`${WHATSAPP}?text=Bonjour%20Yoann%2C%20j%27ai%20une%20question.`} target="_blank" style={s.btnGold}>Envoyer un message</a>
           </div>
         </div>
 
@@ -242,6 +252,7 @@ function formatDate(iso) {
   const MONTHS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre']
   return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`
 }
+
 function formatTime(iso) {
   const d = new Date(iso)
   return `${d.getHours().toString().padStart(2,'0')}h${d.getMinutes().toString().padStart(2,'0')}`
@@ -252,7 +263,6 @@ const s = {
   navLogo: { fontFamily:'Cormorant Garamond, serif', fontSize:18, fontWeight:400 },
   container: { maxWidth:900, margin:'0 auto', padding:'40px 24px' },
   msgBox: { display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 18px', borderRadius:8, border:'1px solid', fontSize:13, marginBottom:24 },
-  statsGrid: { display:'grid', gridTemplateColumns:'1fr 2fr 1fr', gap:16, marginBottom:16 },
   statCard: { background:'var(--surface)', border:'1px solid var(--border)', borderRadius:12, padding:'24px' },
   statLabel: { fontSize:11, fontWeight:600, letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', marginBottom:8 },
   statValue: { fontFamily:'Outfit, sans-serif', fontSize:52, fontWeight:600, lineHeight:1 },
