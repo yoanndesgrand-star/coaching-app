@@ -123,7 +123,7 @@ export default function Dashboard({ profile, setProfile }) {
       }} />
 
       {/* DEMANDE D'ADRESSE au premier login */}
-      {(profile.coaching_type === 'domicile' || profile.coaching_type === 'salle') && !profile.address && (
+      {!profile.address && (profile.coaching_type === 'domicile' || profile.coaching_type === 'presentiel') && (
         <AddressSetup profile={profile} onComplete={() => setProfile(p => ({ ...p, address: 'set' }))} />
       )}
 

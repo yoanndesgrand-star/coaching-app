@@ -5,7 +5,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 )
 
-const ONAIR_ADDRESS = 'ON AIR BNF, 8 rue Cantagrel, Paris 13'
+const ONAIR_ADDRESS = 'ON AIR BNF, 93 avenue de France, Paris 13'
 
 async function getTravelMinutes(origin, destination) {
   try {

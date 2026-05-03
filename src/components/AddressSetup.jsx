@@ -13,7 +13,7 @@ export default function AddressSetup({ profile, onComplete }) {
     if (isHomeclient) {
       await supabase.from('profiles').update({ address }).eq('id', profile.id)
     } else {
-      await supabase.from('profiles').update({ address: 'ON AIR BNF, 8 rue Cantagrel, Paris 13' }).eq('id', profile.id)
+      await supabase.from('profiles').update({ address: 'ON AIR BNF, 93 avenue de France, Paris 13' }).eq('id', profile.id)
     }
     setLoading(false)
     onComplete()
