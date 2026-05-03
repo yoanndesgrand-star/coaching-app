@@ -221,9 +221,13 @@ export default async function handler(req, res) {
           const dynTravel = (clientAddress && b.location) ? (travelCache[`${b.location}|||${clientAddress}`] ?? 20) : 0
           const tMs = dynTravel * 60000
           const bE = new Date(b.end.getTime() + tMs)
-          if (slotStart <= bE && slotEnd > new Date(b.start.getTime() - tMs)) { gConflict = b; gTravelMs = tMs; break }
+          if (slotStart < bE && slotEnd > new Date(b.start.getTime() - tMs)) { gConflict = b; gTravelMs = tMs; break }
         }
-        if (gConflict) { slotStart = roundUpToQuarter(new Date(gConflict.end.getTime() + gTravelMs)); continue }
+        if (gConflict) {
+          const newStart = roundUpToQuarter(new Date(gConflict.end.getTime() + gTravelMs))
+          slotStart = newStart > slotStart ? newStart : new Date(slotStart.getTime() + incrementMs)
+          continue
+        }
 
         // Conflit réservations (utilise le cache pré-calculé)
         let hasConflict = false
@@ -243,10 +247,13 @@ export default async function handler(req, res) {
           const bufMs = dynamicTravel * 60000
           const bS = new Date(bStart.getTime() - bufMs)
           const bE = new Date(bEnd.getTime() + bufMs)
-          if (slotStart <= bE && slotEnd > bS) { hasConflict = true; break }
+          if (slotStart < bE && slotEnd > bS) { hasConflict = true; break }
         }
 
-        if (hasConflict) { slotStart = new Date(slotStart.getTime() + incrementMs); continue }
+        if (hasConflict) {
+          slotStart = new Date(slotStart.getTime() + incrementMs)
+          continue
+        }
 
         // Calculer le temps de trajet depuis l'événement précédent (réservation OU Google Calendar)
         let travelMinutes = 0
