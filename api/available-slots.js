@@ -1,65 +1,56 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-)
-
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY)
 const ONAIR_ADDRESS = 'ON AIR BNF, 93 avenue de France, Paris 13'
 const COACH_HOME = process.env.COACH_HOME_ADDRESS || '36 avenue du général Michel Bizot, 75012 Paris'
 
-// Calculer le décalage horaire Paris (UTC+1 hiver, UTC+2 été)
 function getParisOffsetHours(dateStr) {
-  // Heure d'été (CEST) : dernier dimanche de mars → dernier dimanche d'octobre
   const [y, m, d] = dateStr.split('-').map(Number)
   const date = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
-  
-  // Dernier dimanche de mars
   const marchLast = new Date(Date.UTC(y, 2, 31))
   while (marchLast.getUTCDay() !== 0) marchLast.setUTCDate(marchLast.getUTCDate() - 1)
-  
-  // Dernier dimanche d'octobre
   const octLast = new Date(Date.UTC(y, 9, 31))
   while (octLast.getUTCDay() !== 0) octLast.setUTCDate(octLast.getUTCDate() - 1)
-  
-  // Entre dernier dim mars et dernier dim octobre → UTC+2, sinon UTC+1
   return (date >= marchLast && date < octLast) ? 2 : 1
+}
+
+function roundUpToQuarter(date) {
+  const d = new Date(date)
+  const min = d.getUTCMinutes()
+  const remainder = min % 15
+  if (remainder > 0) d.setUTCMinutes(min + (15 - remainder), 0, 0)
+  else d.setUTCSeconds(0, 0)
+  return d
 }
 
 const travelCache = {}
 async function getTravelMinutes(origin, destination) {
   if (!origin || !destination || origin === destination) return 0
-  const key = `${origin}|||${destination}`
+  const key = origin + '|||' + destination
   if (travelCache[key] !== undefined) return travelCache[key]
   try {
     const apiKey = process.env.GOOGLE_MAPS_KEY
-    if (!apiKey) {
-      console.error('GOOGLE_MAPS_KEY not set!')
-      travelCache[key] = 20
-      return 20
-    }
+    if (!apiKey) { travelCache[key] = 0; return 0 }
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 2000)
-    const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(origin)}&destinations=${encodeURIComponent(destination)}&mode=driving&key=${apiKey}`
+    const url = 'https://maps.googleapis.com/maps/api/distancematrix/json?origins=' + encodeURIComponent(origin) + '&destinations=' + encodeURIComponent(destination) + '&mode=driving&key=' + apiKey
     const res = await fetch(url, { signal: controller.signal })
     clearTimeout(timeout)
     const data = await res.json()
-    console.log('Travel:', origin, '→', destination, '=', JSON.stringify(data?.rows?.[0]?.elements?.[0]))
-    const element = data?.rows?.[0]?.elements?.[0]
-    if (element?.status !== 'OK') {
-      console.error('Maps API error:', element?.status)
-      travelCache[key] = 20
-      return 20
-    }
-    const duration = element.duration?.value
-    const mins = duration ? Math.ceil(duration / 60) : 20
+    const el = data?.rows?.[0]?.elements?.[0]
+    if (el?.status !== 'OK') { travelCache[key] = 0; return 0 }
+    const mins = Math.ceil(el.duration.value / 60)
     travelCache[key] = mins
     return mins
   } catch (e) {
-    console.error('Travel fetch error:', e.message)
-    travelCache[key] = 20
-    return 20
+    travelCache[key] = 0
+    return 0
   }
+}
+
+function cachedTravel(from, to) {
+  if (!from || !to || from === to) return 0
+  return travelCache[from + '|||' + to] || 0
 }
 
 export default async function handler(req, res) {
@@ -70,65 +61,34 @@ export default async function handler(req, res) {
     const now = new Date()
     const targetYear = parseInt(year) || now.getFullYear()
     const targetMonth = parseInt(month) || now.getMonth() + 1
-
     const startDate = new Date(targetYear, targetMonth - 1, 1)
     const endDate = new Date(targetYear, targetMonth, 0)
 
-    // Charger horaires, settings, exceptions, réservations
     const [ohRes, stRes, bpRes, bookRes, clientRes] = await Promise.all([
       supabase.from('opening_hours').select('*').eq('is_active', true),
       supabase.from('coaching_settings').select('*').eq('id', 'admin').single(),
-      supabase.from('blocked_periods').select('*')
-        .gte('date', startDate.toISOString().split('T')[0])
-        .lte('date', endDate.toISOString().split('T')[0]),
-      supabase.from('bookings')
-        .select('*, profiles(coaching_type, address), time_slots(start_time, end_time)')
-        .eq('status', 'confirmed'),
+      supabase.from('blocked_periods').select('*').gte('date', startDate.toISOString().split('T')[0]).lte('date', endDate.toISOString().split('T')[0]),
+      supabase.from('bookings').select('*, profiles(coaching_type, address), time_slots(start_time, end_time)').eq('status', 'confirmed'),
       clientId ? supabase.from('profiles').select('coaching_type, address').eq('id', clientId).single() : Promise.resolve({ data: null })
     ])
 
     const openingHours = ohRes.data || []
-    const settings = stRes.data || { session_duration: 60, buffer_time: 10, slot_increment: 60 }
+    const settings = stRes.data || { session_duration: 60 }
     const blockedPeriods = bpRes.data || []
-    let confirmedBookings = bookRes.data || []
+    const confirmedBookings = bookRes.data || []
     const clientProfile = clientRes.data
-
     const sessionMs = (settings.session_duration || 60) * 60 * 1000
-    const incrementMs = 15 * 60 * 1000 // Créneaux tous les 15 min
-
-    // Arrondir au quart d'heure supérieur (UTC)
-    function roundUpToQuarter(date) {
-      const d = new Date(date)
-      const min = d.getUTCMinutes()
-      const remainder = min % 15
-      if (remainder > 0) {
-        d.setUTCMinutes(min + (15 - remainder), 0, 0)
-      } else {
-        d.setUTCSeconds(0, 0)
-      }
-      return d
-    }
-
-    // Adresse du client demandeur
+    const incrementMs = 15 * 60 * 1000
     const clientAddress = clientProfile?.coaching_type === 'domicile' ? clientProfile?.address : ONAIR_ADDRESS
 
-    // Événements Google Calendar
+    // Google Calendar events
     let googleBusy = []
     try {
-      const { data: tokenData } = await supabase
-        .from('google_tokens').select('*').eq('id', 'admin').single()
+      const { data: tokenData } = await supabase.from('google_tokens').select('*').eq('id', 'admin').single()
       if (tokenData?.access_token) {
         const { google } = await import('googleapis')
-        const oauth2Client = new google.auth.OAuth2(
-          process.env.GOOGLE_CLIENT_ID,
-          process.env.GOOGLE_CLIENT_SECRET,
-          process.env.GOOGLE_REDIRECT_URI
-        )
-        oauth2Client.setCredentials({
-          access_token: tokenData.access_token,
-          refresh_token: tokenData.refresh_token,
-          expiry_date: tokenData.expiry_date
-        })
+        const oauth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI)
+        oauth2Client.setCredentials({ access_token: tokenData.access_token, refresh_token: tokenData.refresh_token, expiry_date: tokenData.expiry_date })
         const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
         const eventsRes = await calendar.events.list({
           calendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
@@ -136,222 +96,174 @@ export default async function handler(req, res) {
           timeMax: new Date(targetYear, targetMonth, 1).toISOString(),
           singleEvents: true
         })
-
         googleBusy = (eventsRes.data.items || [])
-          .filter(e => e.start?.dateTime && e.status !== 'cancelled')
-          .map(e => ({
-            start: new Date(e.start.dateTime),
-            end: new Date(e.end.dateTime),
-            location: e.location || null
-          }))
+          .filter(function(e) { return e.start?.dateTime && e.status !== 'cancelled' })
+          .map(function(e) { return { start: new Date(e.start.dateTime), end: new Date(e.end.dateTime), location: e.location || null } })
       }
     } catch (e) {
       console.log('Google Calendar error:', e.message)
     }
 
-    // Pré-calculer tous les trajets en parallèle (évite le timeout)
+    // Pre-calculate travel times in parallel
     if (clientAddress) {
-      const uniqueLocations = new Set()
-      
-      // Lieux des événements Google Calendar
-      for (const g of googleBusy) {
-        if (g.location && g.location !== clientAddress) uniqueLocations.add(g.location)
-      }
-      // Lieux des réservations
-      for (const b of confirmedBookings) {
-        if (!b.profiles) continue
-        const addr = b.profiles.coaching_type === 'domicile' ? b.profiles.address : ONAIR_ADDRESS
-        if (addr && addr !== clientAddress) uniqueLocations.add(addr)
-      }
-
-      // Ajouter le domicile du coach (pour les gaps > 2h)
-      if (COACH_HOME !== clientAddress) uniqueLocations.add(COACH_HOME)
-
-      // Limiter à 10 lieux max pour éviter le timeout Vercel
-      const locations = [...uniqueLocations].slice(0, 10)
-      // Calculer dans les DEUX directions (vers client ET depuis client)
-      const promises = []
-      for (const loc of locations) {
+      var uniqueLocs = new Set()
+      googleBusy.forEach(function(g) { if (g.location && g.location !== clientAddress) uniqueLocs.add(g.location) })
+      confirmedBookings.forEach(function(b) {
+        if (!b.profiles) return
+        var addr = b.profiles.coaching_type === 'domicile' ? b.profiles.address : ONAIR_ADDRESS
+        if (addr && addr !== clientAddress) uniqueLocs.add(addr)
+      })
+      if (COACH_HOME !== clientAddress) uniqueLocs.add(COACH_HOME)
+      var locs = Array.from(uniqueLocs).slice(0, 10)
+      var promises = []
+      locs.forEach(function(loc) {
         promises.push(getTravelMinutes(loc, clientAddress))
         promises.push(getTravelMinutes(clientAddress, loc))
-      }
+      })
       await Promise.all(promises)
-      console.log('Pre-calculated travel for', locations.length, 'locations (both directions)')
     }
 
-    // Générer les créneaux
-    const slots = []
-    const today = new Date()
+    // Generate slots
+    var slots = []
+    var today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      const date = new Date(d)
+    for (var d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      var date = new Date(d)
       if (date < today) continue
-
-      const dayOfWeek = date.getDay()
-      const oh = openingHours.find(h => h.day_of_week === dayOfWeek)
+      var dayOfWeek = date.getDay()
+      var oh = openingHours.find(function(h) { return h.day_of_week === dayOfWeek })
       if (!oh) continue
 
-      const dateStr = date.toISOString().split('T')[0]
-      const fullBlock = blockedPeriods.find(bp => bp.date === dateStr && !bp.start_time)
+      var dateStr = date.toISOString().split('T')[0]
+      var fullBlock = blockedPeriods.find(function(bp) { return bp.date === dateStr && !bp.start_time })
       if (fullBlock) continue
 
-      const [startH, startM] = oh.start_time.split(':').map(Number)
-      const [endH, endM] = oh.end_time.split(':').map(Number)
+      var parts = oh.start_time.split(':').map(Number)
+      var startH = parts[0], startM = parts[1]
+      parts = oh.end_time.split(':').map(Number)
+      var endH = parts[0], endM = parts[1]
+      var parisOffset = getParisOffsetHours(dateStr)
 
-      // Convertir les heures Paris → UTC
-      // Créer une date Paris et récupérer l'offset réel
-      const dateStr2 = date.toISOString().split('T')[0]
-      const parisOffset = getParisOffsetHours(dateStr2)
-
-      let slotStart = new Date(date)
+      var slotStart = new Date(date)
       slotStart.setUTCHours(startH - parisOffset, startM, 0, 0)
       slotStart = roundUpToQuarter(slotStart)
-      const dayEnd = new Date(date)
+      var dayEnd = new Date(date)
       dayEnd.setUTCHours(endH - parisOffset, endM, 0, 0)
 
       while (slotStart.getTime() + sessionMs <= dayEnd.getTime()) {
-        const slotEnd = new Date(slotStart.getTime() + sessionMs)
+        var slotEnd = new Date(slotStart.getTime() + sessionMs)
 
         if (slotStart <= now) { slotStart = new Date(slotStart.getTime() + incrementMs); continue }
 
-        // Exception partielle
-        const partBlock = blockedPeriods.find(bp => {
+        // Blocked period check
+        var partBlock = blockedPeriods.find(function(bp) {
           if (bp.date !== dateStr || !bp.start_time) return false
-          const bS = new Date(dateStr + 'T' + bp.start_time)
-          const bE = bp.end_time ? new Date(dateStr + 'T' + bp.end_time) : dayEnd
+          var bS = new Date(dateStr + 'T' + bp.start_time)
+          var bE = bp.end_time ? new Date(dateStr + 'T' + bp.end_time) : dayEnd
           return slotStart < bE && slotEnd > bS
         })
         if (partBlock) { slotStart = new Date(slotStart.getTime() + incrementMs); continue }
 
-        // Conflit Google Calendar (utilise le cache pré-calculé)
-        let gConflict = null
-        let gTravelAfterMs = 0
-        for (const b of googleBusy) {
-          // Seulement bloquer si le trajet est connu (dans le cache)
-          const travelAfter = (clientAddress && b.location) ? (travelCache[`${b.location}|||${clientAddress}`] ?? 0) : 0
-          const travelBefore = (clientAddress && b.location) ? (travelCache[`${clientAddress}|||${b.location}`] ?? 0) : 0
-          const bE = new Date(b.end.getTime() + travelAfter * 60000)
-          const bS = new Date(b.start.getTime() - travelBefore * 60000)
-          if (slotStart < bE && slotEnd > bS) { gConflict = b; gTravelAfterMs = travelAfter * 60000; break }
+        // Google Calendar conflict
+        var gConflict = null
+        var gTravelAfterMs = 0
+        for (var gi = 0; gi < googleBusy.length; gi++) {
+          var gb = googleBusy[gi]
+          var tAfter = cachedTravel(gb.location, clientAddress)
+          var tBefore = cachedTravel(clientAddress, gb.location)
+          var bE2 = new Date(gb.end.getTime() + tAfter * 60000)
+          var bS2 = new Date(gb.start.getTime() - tBefore * 60000)
+          if (slotStart < bE2 && slotEnd > bS2) { gConflict = gb; gTravelAfterMs = tAfter * 60000; break }
         }
         if (gConflict) {
-          const newStart = roundUpToQuarter(new Date(gConflict.end.getTime() + gTravelAfterMs))
+          var newStart = roundUpToQuarter(new Date(gConflict.end.getTime() + gTravelAfterMs))
           slotStart = newStart > slotStart ? newStart : new Date(slotStart.getTime() + incrementMs)
           continue
         }
 
-        // Conflit réservations (utilise le cache pré-calculé)
-        let hasConflict = false
-        for (const b of confirmedBookings) {
-          if (!b.time_slots) continue
-          const bStart = new Date(b.time_slots.start_time)
-          const bEnd = new Date(b.time_slots.end_time)
-
-          const prevAddress = b.profiles?.coaching_type === 'domicile' ? b.profiles?.address : ONAIR_ADDRESS
-          const travelAfter = (clientAddress && prevAddress && prevAddress !== clientAddress) ? (travelCache[`${prevAddress}|||${clientAddress}`] ?? 0) : 0
-          const travelBefore = (clientAddress && prevAddress && prevAddress !== clientAddress) ? (travelCache[`${clientAddress}|||${prevAddress}`] ?? 0) : 0
-
-          const bS = new Date(bStart.getTime() - travelBefore * 60000)
-          const bE = new Date(bEnd.getTime() + travelAfter * 60000)
-          if (slotStart < bE && slotEnd > bS) { hasConflict = true; break }
+        // Booking conflict
+        var hasConflict = false
+        for (var bi = 0; bi < confirmedBookings.length; bi++) {
+          var bk = confirmedBookings[bi]
+          if (!bk.time_slots) continue
+          var bkStart = new Date(bk.time_slots.start_time)
+          var bkEnd = new Date(bk.time_slots.end_time)
+          var bkAddr = bk.profiles?.coaching_type === 'domicile' ? bk.profiles?.address : ONAIR_ADDRESS
+          var tA = cachedTravel(bkAddr, clientAddress)
+          var tB = cachedTravel(clientAddress, bkAddr)
+          var bS3 = new Date(bkStart.getTime() - tB * 60000)
+          var bE3 = new Date(bkEnd.getTime() + tA * 60000)
+          if (slotStart < bE3 && slotEnd > bS3) { hasConflict = true; break }
         }
-        }
+        if (hasConflict) { slotStart = new Date(slotStart.getTime() + incrementMs); continue }
 
-        if (hasConflict) {
-          slotStart = new Date(slotStart.getTime() + incrementMs)
-          continue
-        }
+        // Color: travel from previous event
+        var travelMinutes = 0
+        var prevEnd = null
+        var prevAddress = null
 
-        // Calculer le temps de trajet depuis l'événement précédent (réservation OU Google Calendar)
-        let travelMinutes = 0
-
-        // Trouver la dernière réservation avant ce créneau
-        const prevBooking = confirmedBookings
-          .filter(b => b.time_slots && new Date(b.time_slots.end_time) <= slotStart)
-          .sort((a, b) => new Date(b.time_slots.end_time) - new Date(a.time_slots.end_time))[0]
-
-        // Trouver le dernier événement Google Calendar avant ce créneau
-        const prevGoogle = googleBusy
-          .filter(g => g.end <= slotStart)
-          .sort((a, b) => b.end - a.end)[0]
-
-        // Prendre le plus récent des deux
-        let prevAddress = null
-        let prevEnd = null
-
-        if (prevBooking && prevGoogle) {
-          const bookEnd = new Date(prevBooking.time_slots.end_time)
-          if (bookEnd > prevGoogle.end) {
-            prevAddress = prevBooking.profiles?.coaching_type === 'domicile' ? prevBooking.profiles?.address : ONAIR_ADDRESS
-            prevEnd = bookEnd
-          } else {
-            prevAddress = prevGoogle.location
-            prevEnd = prevGoogle.end
+        // Find nearest previous event (booking or Google)
+        for (var pi = 0; pi < confirmedBookings.length; pi++) {
+          var pb = confirmedBookings[pi]
+          if (!pb.time_slots) continue
+          var pEnd = new Date(pb.time_slots.end_time)
+          if (pEnd <= slotStart && (!prevEnd || pEnd > prevEnd)) {
+            prevEnd = pEnd
+            prevAddress = pb.profiles?.coaching_type === 'domicile' ? pb.profiles?.address : ONAIR_ADDRESS
           }
-        } else if (prevBooking) {
-          prevAddress = prevBooking.profiles?.coaching_type === 'domicile' ? prevBooking.profiles?.address : ONAIR_ADDRESS
-          prevEnd = new Date(prevBooking.time_slots.end_time)
-        } else if (prevGoogle) {
-          prevAddress = prevGoogle.location
-          prevEnd = prevGoogle.end
+        }
+        for (var pgi = 0; pgi < googleBusy.length; pgi++) {
+          var pg = googleBusy[pgi]
+          if (pg.end <= slotStart && (!prevEnd || pg.end > prevEnd)) {
+            prevEnd = pg.end
+            prevAddress = pg.location
+          }
         }
 
-        // Si gap > 2h ou pas d'événement précédent → le coach est chez lui
-        const gapHours = prevEnd ? (slotStart - prevEnd) / 3600000 : 999
-        if (gapHours > 2 || !prevEnd) {
-          prevAddress = COACH_HOME
-        }
+        // Gap > 2h or no previous event → coach is at home
+        var gapHours = prevEnd ? (slotStart - prevEnd) / 3600000 : 999
+        if (gapHours > 2 || !prevEnd) prevAddress = COACH_HOME
 
         if (prevAddress && clientAddress && prevAddress !== clientAddress) {
-          travelMinutes = travelCache[`${prevAddress}|||${clientAddress}`] ?? 0
+          travelMinutes = cachedTravel(prevAddress, clientAddress)
         }
 
-        // Calculer aussi le trajet VERS l'événement suivant (réservation OU Google Calendar)
-        let nextTravelMinutes = 0
+        // Also check travel TO next event
+        var nextTravelMinutes = 0
+        var nextStart = null
+        var nextAddress = null
 
-        const nextBooking = confirmedBookings
-          .filter(b => b.time_slots && new Date(b.time_slots.start_time) >= slotEnd)
-          .sort((a, b) => new Date(a.time_slots.start_time) - new Date(b.time_slots.start_time))[0]
-
-        const nextGoogle = googleBusy
-          .filter(g => g.start >= slotEnd)
-          .sort((a, b) => a.start - b.start)[0]
-
-        let nextAddress = null
-        let nextStart = null
-        if (nextBooking && nextGoogle) {
-          const bookStart = new Date(nextBooking.time_slots.start_time)
-          if (bookStart < nextGoogle.start) {
-            nextAddress = nextBooking.profiles?.coaching_type === 'domicile' ? nextBooking.profiles?.address : ONAIR_ADDRESS
-            nextStart = bookStart
-          } else {
-            nextAddress = nextGoogle.location
-            nextStart = nextGoogle.start
+        for (var ni = 0; ni < confirmedBookings.length; ni++) {
+          var nb = confirmedBookings[ni]
+          if (!nb.time_slots) continue
+          var nStart = new Date(nb.time_slots.start_time)
+          if (nStart >= slotEnd && (!nextStart || nStart < nextStart)) {
+            nextStart = nStart
+            nextAddress = nb.profiles?.coaching_type === 'domicile' ? nb.profiles?.address : ONAIR_ADDRESS
           }
-        } else if (nextBooking) {
-          nextAddress = nextBooking.profiles?.coaching_type === 'domicile' ? nextBooking.profiles?.address : ONAIR_ADDRESS
-          nextStart = new Date(nextBooking.time_slots.start_time)
-        } else if (nextGoogle) {
-          nextAddress = nextGoogle.location
-          nextStart = nextGoogle.start
+        }
+        for (var ngi = 0; ngi < googleBusy.length; ngi++) {
+          var ng = googleBusy[ngi]
+          if (ng.start >= slotEnd && (!nextStart || ng.start < nextStart)) {
+            nextStart = ng.start
+            nextAddress = ng.location
+          }
         }
 
-        // Si gap vers le prochain événement > 2h → le coach a le temps de rentrer, pas de trajet à compter
-        const nextGapHours = nextStart ? (nextStart - slotEnd) / 3600000 : 999
+        // Gap to next > 2h → no penalty
+        var nextGapHours = nextStart ? (nextStart - slotEnd) / 3600000 : 999
         if (nextAddress && clientAddress && nextAddress !== clientAddress && nextGapHours <= 2) {
-          nextTravelMinutes = travelCache[`${clientAddress}|||${nextAddress}`] ?? 0
+          nextTravelMinutes = cachedTravel(clientAddress, nextAddress)
         }
 
-        // La couleur = le PIRE des deux trajets (avant et après)
-        const maxTravel = Math.max(travelMinutes, nextTravelMinutes)
-
+        var maxTravel = Math.max(travelMinutes, nextTravelMinutes)
         slots.push({ start: slotStart.toISOString(), end: slotEnd.toISOString(), date: dateStr, travel_minutes: maxTravel })
         slotStart = new Date(slotStart.getTime() + incrementMs)
       }
     }
 
-    return res.status(200).json({ slots })
+    return res.status(200).json({ slots: slots })
   } catch (e) {
     console.error(e)
     return res.status(500).json({ error: e.message })
