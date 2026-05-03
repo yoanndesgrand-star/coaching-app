@@ -7,6 +7,24 @@ const supabase = createClient(
 
 const ONAIR_ADDRESS = 'ON AIR BNF, 93 avenue de France, Paris 13'
 
+// Calculer le décalage horaire Paris (UTC+1 hiver, UTC+2 été)
+function getParisOffsetHours(dateStr) {
+  // Heure d'été (CEST) : dernier dimanche de mars → dernier dimanche d'octobre
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const date = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
+  
+  // Dernier dimanche de mars
+  const marchLast = new Date(Date.UTC(y, 2, 31))
+  while (marchLast.getUTCDay() !== 0) marchLast.setUTCDate(marchLast.getUTCDate() - 1)
+  
+  // Dernier dimanche d'octobre
+  const octLast = new Date(Date.UTC(y, 9, 31))
+  while (octLast.getUTCDay() !== 0) octLast.setUTCDate(octLast.getUTCDate() - 1)
+  
+  // Entre dernier dim mars et dernier dim octobre → UTC+2, sinon UTC+1
+  return (date >= marchLast && date < octLast) ? 2 : 1
+}
+
 const travelCache = {}
 async function getTravelMinutes(origin, destination) {
   if (!origin || !destination || origin === destination) return 0
@@ -153,10 +171,15 @@ export default async function handler(req, res) {
       const [startH, startM] = oh.start_time.split(':').map(Number)
       const [endH, endM] = oh.end_time.split(':').map(Number)
 
+      // Convertir les heures Paris → UTC
+      // Créer une date Paris et récupérer l'offset réel
+      const dateStr2 = date.toISOString().split('T')[0]
+      const parisOffset = getParisOffsetHours(dateStr2)
+
       let slotStart = new Date(date)
-      slotStart.setHours(startH, startM, 0, 0)
+      slotStart.setUTCHours(startH - parisOffset, startM, 0, 0)
       const dayEnd = new Date(date)
-      dayEnd.setHours(endH, endM, 0, 0)
+      dayEnd.setUTCHours(endH - parisOffset, endM, 0, 0)
 
       while (slotStart.getTime() + sessionMs <= dayEnd.getTime()) {
         const slotEnd = new Date(slotStart.getTime() + sessionMs)
