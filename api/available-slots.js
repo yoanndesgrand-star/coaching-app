@@ -190,17 +190,42 @@ export default async function handler(req, res) {
 
         if (hasConflict) { slotStart = new Date(slotStart.getTime() + incrementMs); continue }
 
-        // Calculer le temps de trajet depuis la séance précédente pour coloriser
+        // Calculer le temps de trajet depuis l'événement précédent (réservation OU Google Calendar)
         let travelMinutes = 0
+
+        // Trouver la dernière réservation avant ce créneau
         const prevBooking = confirmedBookings
           .filter(b => b.time_slots && new Date(b.time_slots.end_time) <= slotStart)
           .sort((a, b) => new Date(b.time_slots.end_time) - new Date(a.time_slots.end_time))[0]
 
-        if (prevBooking && clientAddress) {
-          const prevAddress = prevBooking.profiles?.coaching_type === 'domicile' ? prevBooking.profiles?.address : ONAIR_ADDRESS
-          if (prevAddress && prevAddress !== clientAddress) {
-            try { travelMinutes = await getTravelMinutes(prevAddress, clientAddress) } catch(e) {}
+        // Trouver le dernier événement Google Calendar avant ce créneau
+        const prevGoogle = googleBusy
+          .filter(g => g.end <= slotStart)
+          .sort((a, b) => b.end - a.end)[0]
+
+        // Prendre le plus récent des deux
+        let prevAddress = null
+        let prevEnd = null
+
+        if (prevBooking && prevGoogle) {
+          const bookEnd = new Date(prevBooking.time_slots.end_time)
+          if (bookEnd > prevGoogle.end) {
+            prevAddress = prevBooking.profiles?.coaching_type === 'domicile' ? prevBooking.profiles?.address : ONAIR_ADDRESS
+            prevEnd = bookEnd
+          } else {
+            prevAddress = prevGoogle.location
+            prevEnd = prevGoogle.end
           }
+        } else if (prevBooking) {
+          prevAddress = prevBooking.profiles?.coaching_type === 'domicile' ? prevBooking.profiles?.address : ONAIR_ADDRESS
+          prevEnd = new Date(prevBooking.time_slots.end_time)
+        } else if (prevGoogle) {
+          prevAddress = prevGoogle.location
+          prevEnd = prevGoogle.end
+        }
+
+        if (prevAddress && clientAddress && prevAddress !== clientAddress) {
+          try { travelMinutes = await getTravelMinutes(prevAddress, clientAddress) } catch(e) {}
         }
 
         slots.push({ start: slotStart.toISOString(), end: slotEnd.toISOString(), date: dateStr, travel_minutes: travelMinutes })
