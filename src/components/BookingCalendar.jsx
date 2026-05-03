@@ -10,9 +10,9 @@ function getSlotColor(slot) {
 
   // Pas de trajet ou pas d'événement avant → vert
   if (travel === 0 || margin >= 999) return { bg: 'rgba(74,222,128,0.15)', border: 'rgba(74,222,128,0.4)', text: '#4ade80' }
-  // Marge confortable (≥ 10 min après trajet) → vert
-  if (margin >= 10) return { bg: 'rgba(74,222,128,0.15)', border: 'rgba(74,222,128,0.4)', text: '#4ade80' }
-  // Marge serrée (0-10 min) → orange
+  // Marge confortable (≥ 5 min après trajet) → vert
+  if (margin >= 5) return { bg: 'rgba(74,222,128,0.15)', border: 'rgba(74,222,128,0.4)', text: '#4ade80' }
+  // Marge serrée (0-5 min) → orange
   if (margin >= 0) return { bg: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.4)', text: '#fbbf24' }
   // Marge négative (pas assez de temps) → rouge
   return { bg: 'rgba(248,113,113,0.15)', border: 'rgba(248,113,113,0.4)', text: '#f87171' }
