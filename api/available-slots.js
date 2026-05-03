@@ -81,15 +81,15 @@ export default async function handler(req, res) {
     const sessionMs = (settings.session_duration || 60) * 60 * 1000
     const incrementMs = 15 * 60 * 1000 // Créneaux tous les 15 min
 
-    // Arrondir au quart d'heure supérieur
+    // Arrondir au quart d'heure supérieur (UTC)
     function roundUpToQuarter(date) {
       const d = new Date(date)
-      const min = d.getMinutes()
+      const min = d.getUTCMinutes()
       const remainder = min % 15
       if (remainder > 0) {
-        d.setMinutes(min + (15 - remainder), 0, 0)
+        d.setUTCMinutes(min + (15 - remainder), 0, 0)
       } else {
-        d.setSeconds(0, 0)
+        d.setUTCSeconds(0, 0)
       }
       return d
     }
@@ -153,11 +153,43 @@ export default async function handler(req, res) {
 
         googleBusy = allEvents
           .filter(e => e.start?.dateTime && e.status !== 'cancelled')
-          .map(e => ({ 
-            start: new Date(e.start.dateTime), 
-            end: new Date(e.end.dateTime),
-            location: e.location || null
-          }))
+          .map(e => {
+            let location = e.location || null
+
+            // Pour les événements YD Coaching sans lieu, chercher l'adresse dans les réservations
+            if (!location && e.summary?.startsWith('YD Coaching -')) {
+              const matchingBooking = confirmedBookings.find(b => {
+                if (!b.time_slots || !b.google_event_id) return false
+                return b.google_event_id === e.id
+              })
+              if (matchingBooking) {
+                location = matchingBooking.profiles?.coaching_type === 'domicile'
+                  ? matchingBooking.profiles?.address
+                  : ONAIR_ADDRESS
+              }
+            }
+
+            // Pour les événements sans lieu, essayer de déduire depuis le titre
+            if (!location && e.summary) {
+              const title = e.summary.toLowerCase()
+              // Chercher une réservation dont le start_time correspond
+              const matchByTime = confirmedBookings.find(b => {
+                if (!b.time_slots) return false
+                return Math.abs(new Date(b.time_slots.start_time) - new Date(e.start.dateTime)) < 60000
+              })
+              if (matchByTime) {
+                location = matchByTime.profiles?.coaching_type === 'domicile'
+                  ? matchByTime.profiles?.address
+                  : ONAIR_ADDRESS
+              }
+            }
+
+            return {
+              start: new Date(e.start.dateTime),
+              end: new Date(e.end.dateTime),
+              location
+            }
+          })
       }
     } catch (e) {
       console.log('Google Calendar error:', e.message)
