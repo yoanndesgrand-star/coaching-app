@@ -193,7 +193,7 @@ export default function Dashboard({ profile, setProfile }) {
         </div>
 
         {/* CALENDRIER DE RÉSERVATION */}
-        {hasPresentiel && profile.credits > 0 && (
+        {(hasPresentiel || profile.subscription_type === 'domicile') && profile.credits > 0 && (
           <div style={s.section}>
             <div style={s.sectionTitle}>Réserver une séance</div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 20 }}>
