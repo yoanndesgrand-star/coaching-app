@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 const GOLD = '#C4973A'
-const CALENDLY_URL = 'https://calendly.com/contact-yoanndesgrand/coaching'
 const WHATSAPP = 'https://wa.me/33687207855'
 const LOGO_URL = '/logo-yd.png'
 
@@ -30,15 +29,21 @@ const SUBSCRIPTIONS = {
 
 export default function Dashboard({ profile, setProfile }) {
   const [bookings, setBookings] = useState([])
+  const [availableSlots, setAvailableSlots] = useState([])
   const [msg, setMsg] = useState(null)
   const [cancelling, setCancelling] = useState(null)
+  const [bookingSlot, setBookingSlot] = useState(null)
+  const [loadingSlots, setLoadingSlots] = useState(false)
 
   const sub = SUBSCRIPTIONS[profile.subscription_type] || null
   const hasPresentiel = !profile.subscription_type || sub?.hasPresentiel
   const hasOnline = sub?.hasOnline || false
   const isAbonne = hasOnline
 
-  useEffect(() => { loadBookings() }, [])
+  useEffect(() => {
+    loadBookings()
+    if (hasPresentiel) loadSlots()
+  }, [])
 
   async function loadBookings() {
     const { data } = await supabase
@@ -48,10 +53,47 @@ export default function Dashboard({ profile, setProfile }) {
     setBookings(data || [])
   }
 
+  async function loadSlots() {
+    setLoadingSlots(true)
+    const { data } = await supabase
+      .from('time_slots')
+      .select('*')
+      .eq('is_available', true)
+      .gte('start_time', new Date().toISOString())
+      .order('start_time', { ascending: true })
+      .limit(10)
+    setAvailableSlots(data || [])
+    setLoadingSlots(false)
+  }
+
+  async function bookSlot(slotId) {
+    if (bookingSlot) return
+    setBookingSlot(slotId)
+    try {
+      const res = await fetch('/api/book-slot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slotId, clientId: profile.id })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setProfile(p => ({ ...p, credits: data.creditsLeft }))
+        setMsg({ type: 'success', text: 'Séance réservée ! Yoann te confirmera sous peu.' })
+        loadBookings()
+        loadSlots()
+      } else {
+        setMsg({ type: 'error', text: data.error || 'Erreur lors de la réservation' })
+      }
+    } catch (e) {
+      setMsg({ type: 'error', text: 'Erreur de connexion' })
+    }
+    setBookingSlot(null)
+  }
+
   async function cancelBooking(booking) {
     if (!booking.time_slots) return
     const hoursUntil = (new Date(booking.time_slots.start_time) - new Date()) / 3600000
-    if (hoursUntil < 12) { setMsg({ type: 'error', text: 'Annulation impossible moins de 12h avant la séance.' }); return }
+    if (hoursUntil < 24) { setMsg({ type: 'error', text: 'Annulation impossible moins de 24h avant la séance.' }); return }
     setCancelling(booking.id)
     await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', booking.id)
     await supabase.from('time_slots').update({ is_available: true }).eq('id', booking.slot_id)
@@ -59,10 +101,12 @@ export default function Dashboard({ profile, setProfile }) {
     setProfile(p)
     setMsg({ type: 'success', text: 'Séance annulée, crédit restitué.' })
     loadBookings()
+    loadSlots()
     setCancelling(null)
   }
 
   const nextBooking = bookings.find(b => b.time_slots && new Date(b.time_slots.start_time) > new Date())
+  const pastBookings = bookings.filter(b => b.time_slots && new Date(b.time_slots.start_time) < new Date())
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', position: 'relative' }}>
@@ -111,7 +155,7 @@ export default function Dashboard({ profile, setProfile }) {
                 <div style={{ fontSize: 18, fontWeight: 500, margin: '8px 0 4px' }}>{formatDate(nextBooking.time_slots.start_time)}</div>
                 <div style={s.statSub}>{formatTime(nextBooking.time_slots.start_time)} — ON AIR BNF Paris 13e</div>
                 <button onClick={() => cancelBooking(nextBooking)} disabled={cancelling === nextBooking.id} style={s.btnCancel}>
-                  {cancelling === nextBooking.id ? '...' : 'Annuler (si > 12h avant)'}
+                  {cancelling === nextBooking.id ? '...' : 'Annuler (si > 24h avant)'}
                 </button>
               </>
             ) : (
@@ -141,21 +185,44 @@ export default function Dashboard({ profile, setProfile }) {
           </div>
         </div>
 
-        {/* BARRE RÉSERVATION */}
+        {/* CRÉNEAUX DISPONIBLES */}
         {hasPresentiel && profile.credits > 0 && (
-          <div style={s.ctaBar}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>
-                Tu as {profile.credits} crédit{profile.credits > 1 ? 's' : ''} disponible{profile.credits > 1 ? 's' : ''}
+          <div style={s.section}>
+            <div style={s.sectionTitle}>Réserver une séance</div>
+            {loadingSlots ? (
+              <div style={{ color: 'var(--muted)', fontSize: 13 }}>Chargement des créneaux...</div>
+            ) : availableSlots.length === 0 ? (
+              <div style={{ color: 'var(--muted)', fontSize: 13, padding: '8px 0' }}>
+                Aucun créneau disponible pour le moment.
+                <a href={WHATSAPP + '?text=Bonjour%20Yoann%2C%20je%20voudrais%20réserver%20une%20séance.'} target="_blank" style={{ color: GOLD, marginLeft: 8 }}>
+                  Contacte Yoann →
+                </a>
               </div>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>Réserve sur le calendrier de Yoann</div>
-            </div>
-            <button onClick={() => window.open(CALENDLY_URL, '_blank')} style={s.btnGold}>Réserver</button>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {availableSlots.map(slot => (
+                  <div key={slot.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                    <div>
+                      <div style={{ fontWeight: 500, fontSize: 14 }}>{formatDate(slot.start_time)}</div>
+                      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{formatTime(slot.start_time)} — ON AIR BNF Paris 13e</div>
+                    </div>
+                    <button
+                      onClick={() => bookSlot(slot.id)}
+                      disabled={bookingSlot === slot.id}
+                      style={s.btnGold}
+                    >
+                      {bookingSlot === slot.id ? '...' : 'Réserver'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
+        {/* ZÉRO CRÉDIT */}
         {hasPresentiel && !profile.credits && (
-          <div style={{ ...s.ctaBar, borderColor: 'rgba(248,113,113,0.2)', background: 'rgba(248,113,113,0.04)' }}>
+          <div style={{ ...s.ctaBar, borderColor: 'rgba(248,113,113,0.2)', background: 'rgba(248,113,113,0.04)', marginBottom: 16 }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4, color: '#f87171' }}>Aucun crédit disponible</div>
               <div style={{ fontSize: 12, color: 'var(--muted)' }}>Achète des séances ci-dessous pour réserver.</div>
@@ -163,7 +230,7 @@ export default function Dashboard({ profile, setProfile }) {
           </div>
         )}
 
-        {/* ACHETER DES SÉANCES — présentiel seulement */}
+        {/* ACHETER DES SÉANCES */}
         {hasPresentiel && (
           <div style={s.section}>
             <div style={s.sectionTitle}>Acheter des séances</div>
@@ -233,10 +300,9 @@ export default function Dashboard({ profile, setProfile }) {
           <div style={s.section}>
             <div style={s.sectionTitle}>Coaching en ligne</div>
             <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24 }}>
-              Programmes personnalisés — sport, nutrition ou les deux. Accès à ton espace client, suivi hebdomadaire avec Yoann.
+              Programmes personnalisés — sport, nutrition ou les deux. Suivi hebdomadaire avec Yoann.
             </div>
             <div style={s.offresGrid}>
-
               <div style={s.offreCard}>
                 <div style={s.offreLabel}>Programme</div>
                 <div style={s.offreTitle}>Sport en ligne</div>
@@ -273,7 +339,6 @@ export default function Dashboard({ profile, setProfile }) {
                 <div style={s.saving}>Économie 29€</div>
                 <a href={STRIPE.sport_nutri} target="_blank" style={s.btnOffreGold}>Souscrire</a>
               </div>
-
             </div>
             <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 16, textAlign: 'center' }}>
               Après paiement, Yoann te contacte sous 24h pour démarrer ton programme.
@@ -281,17 +346,33 @@ export default function Dashboard({ profile, setProfile }) {
           </div>
         )}
 
-        {/* HISTORIQUE */}
-        {bookings.length > 0 && (
+        {/* SÉANCES À VENIR */}
+        {bookings.filter(b => b.time_slots && new Date(b.time_slots.start_time) > new Date()).length > 0 && (
           <div style={s.section}>
-            <div style={s.sectionTitle}>Mes séances</div>
-            {bookings.map(b => (
+            <div style={s.sectionTitle}>Mes séances à venir</div>
+            {bookings.filter(b => b.time_slots && new Date(b.time_slots.start_time) > new Date()).map(b => (
               <div key={b.id} style={{ ...s.bookingRow, marginBottom: 8 }}>
                 <div>
-                  <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 2 }}>{b.time_slots ? formatDate(b.time_slots.start_time) : 'Séance réservée'}</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{b.time_slots ? formatTime(b.time_slots.start_time) + ' — ON AIR BNF' : 'Horaire à confirmer'}</div>
+                  <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 2 }}>{formatDate(b.time_slots.start_time)}</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{formatTime(b.time_slots.start_time)} — ON AIR BNF Paris 13e</div>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 4, border: '1px solid rgba(74,222,128,0.3)', background: 'rgba(74,222,128,0.1)', color: '#4ade80' }}>Confirmé</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* HISTORIQUE */}
+        {pastBookings.length > 0 && (
+          <div style={s.section}>
+            <div style={s.sectionTitle}>Historique des séances</div>
+            {pastBookings.map(b => (
+              <div key={b.id} style={{ ...s.bookingRow, marginBottom: 8, opacity: 0.7 }}>
+                <div>
+                  <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 2 }}>{b.time_slots ? formatDate(b.time_slots.start_time) : 'Séance passée'}</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{b.time_slots ? formatTime(b.time_slots.start_time) + ' — ON AIR BNF' : ''}</div>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--muted)' }}>Passée</span>
               </div>
             ))}
           </div>
@@ -333,7 +414,7 @@ const s = {
   statLabel: { fontSize:11, fontWeight:600, letterSpacing:'0.15em', textTransform:'uppercase', color:'var(--muted)', marginBottom:8 },
   statValue: { fontFamily:'Outfit, sans-serif', fontSize:52, fontWeight:600, lineHeight:1 },
   statSub: { fontSize:12, color:'var(--muted)', marginTop:4 },
-  ctaBar: { display:'flex', alignItems:'center', justifyContent:'space-between', padding:'20px 28px', background:'rgba(196,151,58,0.06)', border:'1px solid rgba(196,151,58,0.2)', borderRadius:12, flexWrap:'wrap', gap:16, marginBottom:16 },
+  ctaBar: { display:'flex', alignItems:'center', justifyContent:'space-between', padding:'20px 28px', background:'rgba(196,151,58,0.06)', border:'1px solid rgba(196,151,58,0.2)', borderRadius:12, flexWrap:'wrap', gap:16 },
   section: { background:'var(--surface)', border:'1px solid var(--border)', borderRadius:12, padding:'28px', marginBottom:16 },
   sectionTitle: { fontSize:11, fontWeight:600, letterSpacing:'0.15em', textTransform:'uppercase', color:'#C4973A', marginBottom:20 },
   offresGrid: { display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 },
