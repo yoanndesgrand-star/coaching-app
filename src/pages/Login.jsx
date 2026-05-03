@@ -200,7 +200,7 @@ const s = {
   card: {
     padding: '48px 32px',
     background: 'var(--surface)', border: '1px solid var(--border)',
-    borderRadius: 16, padding: '48px 40px',
+    borderRadius: 16, 
   },
   logo: { fontFamily: 'Cormorant Garamond, serif', fontSize: 22, fontWeight: 400, marginBottom: 4, textAlign: 'center' },
   subtitle: { fontSize: 11, fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--muted)', textAlign: 'center', marginBottom: 40 },
