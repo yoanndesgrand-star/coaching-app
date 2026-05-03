@@ -6,6 +6,7 @@ const supabase = createClient(
 )
 
 const ONAIR_ADDRESS = 'ON AIR BNF, 93 avenue de France, Paris 13'
+const COACH_HOME = process.env.COACH_HOME_ADDRESS || '36 avenue du général Michel Bizot, 75012 Paris'
 
 // Calculer le décalage horaire Paris (UTC+1 hiver, UTC+2 été)
 function getParisOffsetHours(dateStr) {
@@ -163,8 +164,11 @@ export default async function handler(req, res) {
         if (addr && addr !== clientAddress) uniqueLocations.add(addr)
       }
 
-      // Limiter à 8 lieux max pour éviter le timeout Vercel (10s)
-      const locations = [...uniqueLocations].slice(0, 8)
+      // Ajouter le domicile du coach (pour les gaps > 2h)
+      if (COACH_HOME !== clientAddress) uniqueLocations.add(COACH_HOME)
+
+      // Limiter à 10 lieux max pour éviter le timeout Vercel
+      const locations = [...uniqueLocations].slice(0, 10)
       // Calculer dans les DEUX directions (vers client ET depuis client)
       const promises = []
       for (const loc of locations) {
@@ -296,6 +300,12 @@ export default async function handler(req, res) {
           prevEnd = prevGoogle.end
         }
 
+        // Si gap > 2h ou pas d'événement précédent → le coach est chez lui
+        const gapHours = prevEnd ? (slotStart - prevEnd) / 3600000 : 999
+        if (gapHours > 2 || !prevEnd) {
+          prevAddress = COACH_HOME
+        }
+
         if (prevAddress && clientAddress && prevAddress !== clientAddress) {
           travelMinutes = travelCache[`${prevAddress}|||${clientAddress}`] ?? 20
         }
@@ -312,20 +322,27 @@ export default async function handler(req, res) {
           .sort((a, b) => a.start - b.start)[0]
 
         let nextAddress = null
+        let nextStart = null
         if (nextBooking && nextGoogle) {
           const bookStart = new Date(nextBooking.time_slots.start_time)
           if (bookStart < nextGoogle.start) {
             nextAddress = nextBooking.profiles?.coaching_type === 'domicile' ? nextBooking.profiles?.address : ONAIR_ADDRESS
+            nextStart = bookStart
           } else {
             nextAddress = nextGoogle.location
+            nextStart = nextGoogle.start
           }
         } else if (nextBooking) {
           nextAddress = nextBooking.profiles?.coaching_type === 'domicile' ? nextBooking.profiles?.address : ONAIR_ADDRESS
+          nextStart = new Date(nextBooking.time_slots.start_time)
         } else if (nextGoogle) {
           nextAddress = nextGoogle.location
+          nextStart = nextGoogle.start
         }
 
-        if (nextAddress && clientAddress && nextAddress !== clientAddress) {
+        // Si gap vers le prochain événement > 2h → le coach a le temps de rentrer, pas de trajet à compter
+        const nextGapHours = nextStart ? (nextStart - slotEnd) / 3600000 : 999
+        if (nextAddress && clientAddress && nextAddress !== clientAddress && nextGapHours <= 2) {
           nextTravelMinutes = travelCache[`${clientAddress}|||${nextAddress}`] ?? 20
         }
 
