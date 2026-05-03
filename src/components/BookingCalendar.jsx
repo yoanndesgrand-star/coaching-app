@@ -5,16 +5,13 @@ const MONTHS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Aoû
 const DAYS_SHORT = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam']
 
 function getSlotColor(slot) {
-  const margin = slot.margin_minutes ?? 999
   const travel = slot.travel_minutes || 0
 
-  // Pas de trajet ou pas d'événement avant → vert
-  if (travel === 0 || margin >= 999) return { bg: 'rgba(74,222,128,0.15)', border: 'rgba(74,222,128,0.4)', text: '#4ade80' }
-  // Marge confortable (≥ 5 min après trajet) → vert
-  if (margin >= 5) return { bg: 'rgba(74,222,128,0.15)', border: 'rgba(74,222,128,0.4)', text: '#4ade80' }
-  // Marge serrée (0-5 min) → orange
-  if (margin >= 0) return { bg: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.4)', text: '#fbbf24' }
-  // Marge négative (pas assez de temps) → rouge
+  // Pas de trajet ou même zone → vert
+  if (travel <= 10) return { bg: 'rgba(74,222,128,0.15)', border: 'rgba(74,222,128,0.4)', text: '#4ade80' }
+  // Trajet modéré (10-25 min) → orange
+  if (travel <= 25) return { bg: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.4)', text: '#fbbf24' }
+  // Long trajet (25+ min) → rouge
   return { bg: 'rgba(248,113,113,0.15)', border: 'rgba(248,113,113,0.4)', text: '#f87171' }
 }
 
