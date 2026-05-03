@@ -112,7 +112,9 @@ export default function Dashboard({ profile, setProfile }) {
     setCancelling(null)
   }
 
-  const nextBooking = bookings.find(b => b.time_slots && new Date(b.time_slots.start_time) > new Date())
+  const nextBooking = bookings
+    .filter(b => b.time_slots && new Date(b.time_slots.start_time) > new Date())
+    .sort((a, b) => new Date(a.time_slots.start_time) - new Date(b.time_slots.start_time))[0]
   const pastBookings = bookings.filter(b => b.time_slots && new Date(b.time_slots.start_time) < new Date())
 
   return (
