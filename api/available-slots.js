@@ -9,7 +9,6 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
 
   try {
-    // 1. Récupérer les paramètres
     const { year, month } = req.query
     const now = new Date()
     const targetYear = parseInt(year) || now.getFullYear()
@@ -18,33 +17,39 @@ export default async function handler(req, res) {
     const startDate = new Date(targetYear, targetMonth - 1, 1)
     const endDate = new Date(targetYear, targetMonth, 0)
 
-    // 2. Charger horaires, settings, exceptions, réservations existantes
-    const [ohRes, stRes, bpRes, bookRes] = await Promise.all([
-      supabase.from('opening_hours').select('*').eq('is_active', true),
-      supabase.from('coaching_settings').select('*').eq('id', 'admin').single(),
-      supabase.from('blocked_periods').select('*')
-        .gte('date', startDate.toISOString().split('T')[0])
-        .lte('date', endDate.toISOString().split('T')[0]),
-      supabase.from('bookings').select('*, time_slots(start_time, end_time)')
-        .eq('status', 'confirmed')
-        .gte('time_slots.start_time', startDate.toISOString())
-        .lte('time_slots.start_time', endDate.toISOString() + 'Z')
-    ])
+    // Charger horaires actifs
+    const { data: openingHours, error: ohError } = await supabase
+      .from('opening_hours').select('*').eq('is_active', true)
 
-    const openingHours = ohRes.data || []
-    const settings = stRes.data || { session_duration: 60, buffer_time: 10 }
-    const blockedPeriods = bpRes.data || []
-    const confirmedBookings = bookRes.data || []
+    if (ohError) return res.status(500).json({ error: ohError.message })
+    if (!openingHours || openingHours.length === 0)
+      return res.status(200).json({ slots: [], debug: 'no opening hours' })
 
-    const sessionDuration = settings.session_duration * 60 * 1000
-    const bufferTime = settings.buffer_time * 60 * 1000
+    // Charger settings
+    const { data: settingsData } = await supabase
+      .from('coaching_settings').select('*').eq('id', 'admin').single()
+    const sessionMinutes = settingsData?.session_duration || 60
+    const bufferMinutes = settingsData?.buffer_time || 10
+    const sessionMs = sessionMinutes * 60 * 1000
+    const bufferMs = bufferMinutes * 60 * 1000
 
-    // 3. Récupérer événements Google Calendar
-    let googleBusyTimes = []
+    // Charger exceptions
+    const { data: blockedPeriods } = await supabase
+      .from('blocked_periods').select('*')
+      .gte('date', startDate.toISOString().split('T')[0])
+      .lte('date', endDate.toISOString().split('T')[0])
+
+    // Charger réservations confirmées
+    const { data: confirmedBookings } = await supabase
+      .from('bookings')
+      .select('*, time_slots(start_time, end_time)')
+      .eq('status', 'confirmed')
+
+    // Événements Google Calendar
+    let googleBusy = []
     try {
       const { data: tokenData } = await supabase
         .from('google_tokens').select('*').eq('id', 'admin').single()
-
       if (tokenData?.access_token) {
         const { google } = await import('googleapis')
         const oauth2Client = new google.auth.OAuth2(
@@ -62,18 +67,17 @@ export default async function handler(req, res) {
           calendarId: 'primary',
           timeMin: startDate.toISOString(),
           timeMax: new Date(targetYear, targetMonth, 1).toISOString(),
-          singleEvents: true,
-          orderBy: 'startTime'
+          singleEvents: true
         })
-        googleBusyTimes = (eventsRes.data.items || [])
+        googleBusy = (eventsRes.data.items || [])
           .filter(e => e.start?.dateTime && e.status !== 'cancelled')
           .map(e => ({ start: new Date(e.start.dateTime), end: new Date(e.end.dateTime) }))
       }
     } catch (e) {
-      console.error('Google Calendar fetch error:', e.message)
+      console.log('Google error (non-blocking):', e.message)
     }
 
-    // 4. Générer les créneaux disponibles
+    // Générer les créneaux
     const slots = []
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -83,55 +87,54 @@ export default async function handler(req, res) {
       if (date < today) continue
 
       const dayOfWeek = date.getDay()
-      const openingHour = openingHours.find(h => h.day_of_week === dayOfWeek)
-      if (!openingHour) continue
+      const oh = openingHours.find(h => h.day_of_week === dayOfWeek)
+      if (!oh) continue
 
       const dateStr = date.toISOString().split('T')[0]
 
-      // Vérifier si la journée entière est bloquée
-      const dayBlocked = blockedPeriods.find(bp => bp.date === dateStr && !bp.start_time)
-      if (dayBlocked) continue
+      // Journée entière bloquée ?
+      const fullBlock = (blockedPeriods || []).find(bp => bp.date === dateStr && !bp.start_time)
+      if (fullBlock) continue
 
-      // Générer les créneaux de la journée
-      const [startH, startM] = openingHour.start_time.split(':').map(Number)
-      const [endH, endM] = openingHour.end_time.split(':').map(Number)
+      const [startH, startM] = oh.start_time.split(':').map(Number)
+      const [endH, endM] = oh.end_time.split(':').map(Number)
 
       let slotStart = new Date(date)
       slotStart.setHours(startH, startM, 0, 0)
       const dayEnd = new Date(date)
       dayEnd.setHours(endH, endM, 0, 0)
 
-      while (slotStart.getTime() + sessionDuration <= dayEnd.getTime()) {
-        const slotEnd = new Date(slotStart.getTime() + sessionDuration)
+      while (slotStart.getTime() + sessionMs <= dayEnd.getTime()) {
+        const slotEnd = new Date(slotStart.getTime() + sessionMs)
 
-        // Pas dans le passé
+        // Passé ?
         if (slotStart <= now) { slotStart = slotEnd; continue }
 
-        // Vérifier exceptions horaires
-        const partialBlock = blockedPeriods.find(bp => {
+        // Exception partielle ?
+        const partBlock = (blockedPeriods || []).find(bp => {
           if (bp.date !== dateStr || !bp.start_time) return false
-          const bStart = new Date(dateStr + 'T' + bp.start_time)
-          const bEnd = bp.end_time ? new Date(dateStr + 'T' + bp.end_time) : dayEnd
-          return slotStart < bEnd && slotEnd > bStart
+          const bS = new Date(dateStr + 'T' + bp.start_time)
+          const bE = bp.end_time ? new Date(dateStr + 'T' + bp.end_time) : dayEnd
+          return slotStart < bE && slotEnd > bS
         })
-        if (partialBlock) { slotStart = slotEnd; continue }
+        if (partBlock) { slotStart = slotEnd; continue }
 
-        // Vérifier Google Calendar (avec buffer)
-        const googleConflict = googleBusyTimes.find(busy => {
-          const busyStart = new Date(busy.start.getTime() - bufferTime)
-          const busyEnd = new Date(busy.end.getTime() + bufferTime)
-          return slotStart < busyEnd && slotEnd > busyStart
+        // Conflit Google Calendar ?
+        const gConflict = googleBusy.find(b => {
+          const bS = new Date(b.start.getTime() - bufferMs)
+          const bE = new Date(b.end.getTime() + bufferMs)
+          return slotStart < bE && slotEnd > bS
         })
-        if (googleConflict) { slotStart = new Date(googleConflict.end.getTime() + bufferTime); continue }
+        if (gConflict) { slotStart = new Date(gConflict.end.getTime() + bufferMs); continue }
 
-        // Vérifier réservations existantes (avec buffer)
-        const bookingConflict = confirmedBookings.find(b => {
+        // Conflit réservation existante ?
+        const bConflict = (confirmedBookings || []).find(b => {
           if (!b.time_slots) return false
-          const bStart = new Date(new Date(b.time_slots.start_time).getTime() - bufferTime)
-          const bEnd = new Date(new Date(b.time_slots.end_time).getTime() + bufferTime)
-          return slotStart < bEnd && slotEnd > bStart
+          const bS = new Date(new Date(b.time_slots.start_time).getTime() - bufferMs)
+          const bE = new Date(new Date(b.time_slots.end_time).getTime() + bufferMs)
+          return slotStart < bE && slotEnd > bS
         })
-        if (bookingConflict) { slotStart = new Date(new Date(bookingConflict.time_slots.end_time).getTime() + bufferTime); continue }
+        if (bConflict) { slotStart = new Date(new Date(bConflict.time_slots.end_time).getTime() + bufferMs); continue }
 
         slots.push({
           start: slotStart.toISOString(),
