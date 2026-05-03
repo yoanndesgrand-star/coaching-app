@@ -107,7 +107,7 @@ export default function Dashboard({ profile, setProfile }) {
             ) : (
               <>
                 <div style={{ fontSize: 13, color: 'var(--muted)', margin: '12px 0' }}>Aucune séance prévue</div>
-                {hasPresentiel && (
+                {hasPresentiel && profile.credits > 0 && (
                   <button onClick={() => window.open(CALENDLY_URL, '_blank')} style={s.btnGold}>Réserver une séance</button>
                 )}
               </>
