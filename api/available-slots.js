@@ -133,77 +133,16 @@ export default async function handler(req, res) {
           calendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
           timeMin: startDate.toISOString(),
           timeMax: new Date(targetYear, targetMonth, 1).toISOString(),
-          singleEvents: true,
-          showDeleted: true
+          singleEvents: true
         })
 
-        const allEvents = eventsRes.data.items || []
-
-        // Sync : détecter les événements supprimés → annuler les réservations correspondantes
-        const cancelledGcalEvents = allEvents.filter(e => e.status === 'cancelled' && e.id)
-        const cancelledBookingIds = new Set()
-        for (const event of cancelledGcalEvents) {
-          const { data: bookingToCancel } = await supabase
-            .from('bookings')
-            .select('id, client_id, slot_id')
-            .eq('google_event_id', event.id)
-            .eq('status', 'confirmed')
-            .single()
-
-          if (bookingToCancel) {
-            await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingToCancel.id)
-            await supabase.from('time_slots').update({ is_available: true }).eq('id', bookingToCancel.slot_id)
-            const { data: p } = await supabase.from('profiles').select('credits').eq('id', bookingToCancel.client_id).single()
-            if (p) await supabase.from('profiles').update({ credits: (p.credits || 0) + 1 }).eq('id', bookingToCancel.client_id)
-            cancelledBookingIds.add(bookingToCancel.id)
-            console.log('Auto-cancelled booking', bookingToCancel.id, 'from deleted Google event', event.id)
-          }
-        }
-
-        // Retirer les réservations annulées de la liste
-        if (cancelledBookingIds.size > 0) {
-          confirmedBookings = confirmedBookings.filter(b => !cancelledBookingIds.has(b.id))
-        }
-
-        googleBusy = allEvents
+        googleBusy = (eventsRes.data.items || [])
           .filter(e => e.start?.dateTime && e.status !== 'cancelled')
-          .map(e => {
-            let location = e.location || null
-
-            // Pour les événements YD Coaching sans lieu, chercher l'adresse dans les réservations
-            if (!location && e.summary?.startsWith('YD Coaching -')) {
-              const matchingBooking = confirmedBookings.find(b => {
-                if (!b.time_slots || !b.google_event_id) return false
-                return b.google_event_id === e.id
-              })
-              if (matchingBooking) {
-                location = matchingBooking.profiles?.coaching_type === 'domicile'
-                  ? matchingBooking.profiles?.address
-                  : ONAIR_ADDRESS
-              }
-            }
-
-            // Pour les événements sans lieu, essayer de déduire depuis le titre
-            if (!location && e.summary) {
-              const title = e.summary.toLowerCase()
-              // Chercher une réservation dont le start_time correspond
-              const matchByTime = confirmedBookings.find(b => {
-                if (!b.time_slots) return false
-                return Math.abs(new Date(b.time_slots.start_time) - new Date(e.start.dateTime)) < 60000
-              })
-              if (matchByTime) {
-                location = matchByTime.profiles?.coaching_type === 'domicile'
-                  ? matchByTime.profiles?.address
-                  : ONAIR_ADDRESS
-              }
-            }
-
-            return {
-              start: new Date(e.start.dateTime),
-              end: new Date(e.end.dateTime),
-              location
-            }
-          })
+          .map(e => ({
+            start: new Date(e.start.dateTime),
+            end: new Date(e.end.dateTime),
+            location: e.location || null
+          }))
       }
     } catch (e) {
       console.log('Google Calendar error:', e.message)
@@ -275,24 +214,18 @@ export default async function handler(req, res) {
         })
         if (partBlock) { slotStart = new Date(slotStart.getTime() + incrementMs); continue }
 
-        // Conflit Google Calendar avec calcul de trajet
+        // Conflit Google Calendar (utilise le cache pré-calculé)
         let gConflict = null
         let gTravelMs = 0
         for (const b of googleBusy) {
-          let dynTravel = 0
-          if (clientAddress && b.location) {
-            try {
-              dynTravel = await getTravelMinutes(b.location, clientAddress)
-            } catch(e) {}
-          }
+          const dynTravel = (clientAddress && b.location) ? (travelCache[`${b.location}|||${clientAddress}`] ?? 20) : 0
           const tMs = dynTravel * 60000
-          const bS = new Date(b.start.getTime() - tMs)
           const bE = new Date(b.end.getTime() + tMs)
-          if (slotStart <= bE && slotEnd > bS) { gConflict = b; gTravelMs = tMs; break }
+          if (slotStart <= bE && slotEnd > new Date(b.start.getTime() - tMs)) { gConflict = b; gTravelMs = tMs; break }
         }
         if (gConflict) { slotStart = roundUpToQuarter(new Date(gConflict.end.getTime() + gTravelMs)); continue }
 
-        // Conflit réservations avec calcul de trajet
+        // Conflit réservations (utilise le cache pré-calculé)
         let hasConflict = false
         for (const b of confirmedBookings) {
           if (!b.time_slots) continue
@@ -302,13 +235,8 @@ export default async function handler(req, res) {
           let dynamicTravel = 0
           if (clientAddress) {
             const prevAddress = b.profiles?.coaching_type === 'domicile' ? b.profiles?.address : ONAIR_ADDRESS
-            const nextAddress = clientAddress
-
-            if (prevAddress && nextAddress && prevAddress !== nextAddress) {
-              try {
-                const travelMins = await getTravelMinutes(prevAddress, nextAddress)
-                dynamicTravel = travelMins
-              } catch (e) {}
+            if (prevAddress && prevAddress !== clientAddress) {
+              dynamicTravel = travelCache[`${prevAddress}|||${clientAddress}`] ?? 20
             }
           }
 
@@ -355,7 +283,7 @@ export default async function handler(req, res) {
         }
 
         if (prevAddress && clientAddress && prevAddress !== clientAddress) {
-          try { travelMinutes = await getTravelMinutes(prevAddress, clientAddress) } catch(e) {}
+          travelMinutes = travelCache[`${prevAddress}|||${clientAddress}`] ?? 20
         }
 
         // Marge = temps entre fin de la séance précédente et début de ce créneau, moins le trajet
