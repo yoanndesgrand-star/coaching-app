@@ -173,6 +173,16 @@ export default function Dashboard({ profile, setProfile }) {
         {hasPresentiel && (
           <div style={s.section}>
             <div style={s.sectionTitle}>Acheter des séances</div>
+            <div style={{ marginBottom: 20 }}>
+  
+    href={`${WHATSAPP}?text=Bonjour%20Yoann%2C%20je%20souhaite%20r%C3%A9server%20une%20s%C3%A9ance%20et%20r%C3%A9gler%20sur%20place.%20Peux-tu%20m%27ajouter%20un%20cr%C3%A9dit%20%3F`}
+    target="_blank"
+    style={{ ...s.btnGold, display: 'inline-block' }}
+  >
+    Payer sur place →
+  </a>
+  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>Espèces ou CB — Yoann t'ajoute le crédit après réception</div>
+</div>
             {isAbonne && (
               <div style={{ fontSize: 12, color: GOLD, marginBottom: 20, padding: '8px 14px', background: 'rgba(196,151,58,0.08)', borderRadius: 6, border: '1px solid rgba(196,151,58,0.2)' }}>
                 Tarif abonné — séances à 50€ au lieu de 60€
