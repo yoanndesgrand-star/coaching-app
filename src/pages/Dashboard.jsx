@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import BookingCalendar from '../components/BookingCalendar'
+import AddressSetup from '../components/AddressSetup'
 import { supabase } from '../lib/supabase'
 
 const GOLD = '#C4973A'
@@ -120,6 +121,11 @@ export default function Dashboard({ profile, setProfile }) {
         backgroundPosition: 'center',
         opacity: 0.06, pointerEvents: 'none', zIndex: 0
       }} />
+
+      {/* DEMANDE D'ADRESSE au premier login */}
+      {(profile.coaching_type === 'domicile' || profile.coaching_type === 'salle') && !profile.address && (
+        <AddressSetup profile={profile} onComplete={() => setProfile(p => ({ ...p, address: 'set' }))} />
+      )}
 
       <nav style={s.nav}>
         <div style={s.navLogo}>Yoann <span style={{ color: GOLD }}>Desgrand</span></div>
@@ -399,7 +405,7 @@ const s = {
   statValue: { fontFamily:'Outfit, sans-serif', fontSize:52, fontWeight:600, lineHeight:1 },
   statSub: { fontSize:12, color:'var(--muted)', marginTop:4 },
   ctaBar: { display:'flex', alignItems:'center', justifyContent:'space-between', padding:'20px 28px', background:'rgba(196,151,58,0.06)', border:'1px solid rgba(196,151,58,0.2)', borderRadius:12, flexWrap:'wrap', gap:16 },
-  section: { background:'var(--surface)', border:'1px solid var(--bo∑rder)', borderRadius:12, padding:'28px', marginBottom:16 },
+  section: { background:'var(--surface)', border:'1px solid var(--border)', borderRadius:12, padding:'28px', marginBottom:16 },
   sectionTitle: { fontSize:11, fontWeight:600, letterSpacing:'0.15em', textTransform:'uppercase', color:'#C4973A', marginBottom:20 },
   offresGrid: { display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 },
   offreCard: { background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:10, padding:'20px 16px', display:'flex', flexDirection:'column', gap:8 },

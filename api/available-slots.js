@@ -5,11 +5,25 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 )
 
+const ONAIR_ADDRESS = 'ON AIR BNF, 8 rue Cantagrel, Paris 13'
+
+async function getTravelMinutes(origin, destination) {
+  try {
+    const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(origin)}&destinations=${encodeURIComponent(destination)}&mode=driving&key=${process.env.GOOGLE_MAPS_KEY}`
+    const res = await fetch(url)
+    const data = await res.json()
+    const duration = data?.rows?.[0]?.elements?.[0]?.duration?.value
+    return duration ? Math.ceil(duration / 60) : 15
+  } catch (e) {
+    return 15
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
 
   try {
-    const { year, month } = req.query
+    const { year, month, clientId } = req.query
     const now = new Date()
     const targetYear = parseInt(year) || now.getFullYear()
     const targetMonth = parseInt(month) || now.getMonth() + 1
@@ -17,35 +31,31 @@ export default async function handler(req, res) {
     const startDate = new Date(targetYear, targetMonth - 1, 1)
     const endDate = new Date(targetYear, targetMonth, 0)
 
-    // Charger horaires actifs
-    const { data: openingHours, error: ohError } = await supabase
-      .from('opening_hours').select('*').eq('is_active', true)
+    // Charger horaires, settings, exceptions, réservations
+    const [ohRes, stRes, bpRes, bookRes, clientRes] = await Promise.all([
+      supabase.from('opening_hours').select('*').eq('is_active', true),
+      supabase.from('coaching_settings').select('*').eq('id', 'admin').single(),
+      supabase.from('blocked_periods').select('*')
+        .gte('date', startDate.toISOString().split('T')[0])
+        .lte('date', endDate.toISOString().split('T')[0]),
+      supabase.from('bookings')
+        .select('*, profiles(coaching_type, address), time_slots(start_time, end_time)')
+        .eq('status', 'confirmed'),
+      clientId ? supabase.from('profiles').select('coaching_type, address').eq('id', clientId).single() : Promise.resolve({ data: null })
+    ])
 
-    if (ohError) return res.status(500).json({ error: ohError.message })
-    if (!openingHours || openingHours.length === 0)
-      return res.status(200).json({ slots: [], debug: 'no opening hours' })
+    const openingHours = ohRes.data || []
+    const settings = stRes.data || { session_duration: 60, buffer_time: 10, slot_increment: 60 }
+    const blockedPeriods = bpRes.data || []
+    const confirmedBookings = bookRes.data || []
+    const clientProfile = clientRes.data
 
-    // Charger settings
-    const { data: settingsData } = await supabase
-      .from('coaching_settings').select('*').eq('id', 'admin').single()
-    const sessionMinutes = settingsData?.session_duration || 60
-    const bufferMinutes = settingsData?.buffer_time || 10
-    const sessionMs = sessionMinutes * 60 * 1000
-    const bufferMs = bufferMinutes * 60 * 1000
-    const incrementMinutes = settingsData?.slot_increment || sessionMinutes
-    const incrementMs = incrementMinutes * 60 * 1000
+    const sessionMs = (settings.session_duration || 60) * 60 * 1000
+    const bufferMinutes = settings.buffer_time || 10
+    const incrementMs = (settings.slot_increment || 60) * 60 * 1000
 
-    // Charger exceptions
-    const { data: blockedPeriods } = await supabase
-      .from('blocked_periods').select('*')
-      .gte('date', startDate.toISOString().split('T')[0])
-      .lte('date', endDate.toISOString().split('T')[0])
-
-    // Charger réservations confirmées
-    const { data: confirmedBookings } = await supabase
-      .from('bookings')
-      .select('*, time_slots(start_time, end_time)')
-      .eq('status', 'confirmed')
+    // Adresse du client demandeur
+    const clientAddress = clientProfile?.coaching_type === 'domicile' ? clientProfile?.address : ONAIR_ADDRESS
 
     // Événements Google Calendar
     let googleBusy = []
@@ -76,7 +86,7 @@ export default async function handler(req, res) {
           .map(e => ({ start: new Date(e.start.dateTime), end: new Date(e.end.dateTime) }))
       }
     } catch (e) {
-      console.log('Google error (non-blocking):', e.message)
+      console.log('Google Calendar error:', e.message)
     }
 
     // Générer les créneaux
@@ -93,9 +103,7 @@ export default async function handler(req, res) {
       if (!oh) continue
 
       const dateStr = date.toISOString().split('T')[0]
-
-      // Journée entière bloquée ?
-      const fullBlock = (blockedPeriods || []).find(bp => bp.date === dateStr && !bp.start_time)
+      const fullBlock = blockedPeriods.find(bp => bp.date === dateStr && !bp.start_time)
       if (fullBlock) continue
 
       const [startH, startM] = oh.start_time.split(':').map(Number)
@@ -109,42 +117,56 @@ export default async function handler(req, res) {
       while (slotStart.getTime() + sessionMs <= dayEnd.getTime()) {
         const slotEnd = new Date(slotStart.getTime() + sessionMs)
 
-        // Passé ?
-        if (slotStart <= now) { slotStart = slotEnd; continue }
+        if (slotStart <= now) { slotStart = new Date(slotStart.getTime() + incrementMs); continue }
 
-        // Exception partielle ?
-        const partBlock = (blockedPeriods || []).find(bp => {
+        // Exception partielle
+        const partBlock = blockedPeriods.find(bp => {
           if (bp.date !== dateStr || !bp.start_time) return false
           const bS = new Date(dateStr + 'T' + bp.start_time)
           const bE = bp.end_time ? new Date(dateStr + 'T' + bp.end_time) : dayEnd
           return slotStart < bE && slotEnd > bS
         })
-        if (partBlock) { slotStart = slotEnd; continue }
+        if (partBlock) { slotStart = new Date(slotStart.getTime() + incrementMs); continue }
 
-        // Conflit Google Calendar ?
+        // Conflit Google Calendar
         const gConflict = googleBusy.find(b => {
-          const bS = new Date(b.start.getTime() - bufferMs)
-          const bE = new Date(b.end.getTime() + bufferMs)
+          const bS = new Date(b.start.getTime() - bufferMinutes * 60000)
+          const bE = new Date(b.end.getTime() + bufferMinutes * 60000)
           return slotStart < bE && slotEnd > bS
         })
-        if (gConflict) { slotStart = new Date(gConflict.end.getTime() + bufferMs); continue }
+        if (gConflict) { slotStart = new Date(gConflict.end.getTime() + bufferMinutes * 60000); continue }
 
-        // Conflit réservation existante ?
-        const bConflict = (confirmedBookings || []).find(b => {
-          if (!b.time_slots) return false
-          const bS = new Date(new Date(b.time_slots.start_time).getTime() - bufferMs)
-          const bE = new Date(new Date(b.time_slots.end_time).getTime() + bufferMs)
-          return slotStart < bE && slotEnd > bS
-        })
-        if (bConflict) { slotStart = new Date(new Date(bConflict.time_slots.end_time).getTime() + bufferMs); continue }
+        // Conflit réservations avec calcul de trajet
+        let hasConflict = false
+        for (const b of confirmedBookings) {
+          if (!b.time_slots) continue
+          const bStart = new Date(b.time_slots.start_time)
+          const bEnd = new Date(b.time_slots.end_time)
 
-        slots.push({
-          start: slotStart.toISOString(),
-          end: slotEnd.toISOString(),
-          date: dateStr
-        })
+          // Calculer le tampon dynamique selon les types de coaching
+          let dynamicBuffer = bufferMinutes
+          if (clientAddress) {
+            const prevAddress = b.profiles?.coaching_type === 'domicile' ? b.profiles?.address : ONAIR_ADDRESS
+            const nextAddress = clientAddress
 
-        slotStart = slotEnd
+            if (prevAddress && nextAddress && prevAddress !== nextAddress) {
+              try {
+                const travelMins = await getTravelMinutes(prevAddress, nextAddress)
+                dynamicBuffer = travelMins + bufferMinutes
+              } catch (e) {}
+            }
+          }
+
+          const bufMs = dynamicBuffer * 60000
+          const bS = new Date(bStart.getTime() - bufMs)
+          const bE = new Date(bEnd.getTime() + bufMs)
+          if (slotStart < bE && slotEnd > bS) { hasConflict = true; break }
+        }
+
+        if (hasConflict) { slotStart = new Date(slotStart.getTime() + incrementMs); continue }
+
+        slots.push({ start: slotStart.toISOString(), end: slotEnd.toISOString(), date: dateStr })
+        slotStart = new Date(slotStart.getTime() + incrementMs)
       }
     }
 

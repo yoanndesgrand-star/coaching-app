@@ -21,7 +21,7 @@ export default function BookingCalendar({ profile, onBooked }) {
     setLoading(true)
     setSelectedDate(null)
     try {
-      const res = await fetch('/api/available-slots?year=' + year + '&month=' + month)
+      const res = await fetch('/api/available-slots?year=' + year + '&month=' + month + '&clientId=' + profile.id)
       const data = await res.json()
       setSlots(data.slots || [])
     } catch (e) {
