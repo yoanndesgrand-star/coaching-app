@@ -138,16 +138,6 @@ export default function Dashboard({ profile, setProfile }) {
           </div>
         </div>
 
-        {/* MESSAGE ZÉRO CRÉDIT */}
-        {hasPresentiel && !profile.credits && (
-          <div style={{ ...s.ctaBar, borderColor: 'rgba(248,113,113,0.2)', background: 'rgba(248,113,113,0.04)' }}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4, color: '#f87171' }}>Aucun crédit disponible</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>Achète des séances ci-dessous pour réserver.</div>
-            </div>
-          </div>
-        )}
-
         {/* BARRE RÉSERVATION — présentiel avec crédits */}
         {hasPresentiel && profile.credits > 0 && (
           <div style={s.ctaBar}>
