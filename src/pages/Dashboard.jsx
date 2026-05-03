@@ -4,7 +4,8 @@ import { supabase } from '../lib/supabase'
 const GOLD = '#C4973A'
 const CALENDLY_URL = 'https://calendly.com/contact-yoanndesgrand/coaching'
 const WHATSAPP = 'https://wa.me/33687207855'
- const LOGO_URL = '/logo-yd.png'
+const LOGO_URL = '/logo-yd.png'
+
 const STRIPE = {
   seance_60:  'https://buy.stripe.com/28E5kCcMB9mWaR8d7M5Rm00',
   seance_50:  'https://buy.stripe.com/4gM6oG4g5dDc9N45Fk5Rm06',
@@ -60,18 +61,17 @@ export default function Dashboard({ profile, setProfile }) {
   const nextBooking = bookings.find(b => b.time_slots && new Date(b.time_slots.start_time) > new Date())
 
   return (
-  <div style={{ minHeight: '100vh', background: 'var(--bg)', position: 'relative' }}>
-  <div style={{
-    position: 'fixed', top: '50%', left: '50%',
-    transform: 'translate(-50%, -50%)',
-    width: 'min(65vw, 65vh)', height: 'min(65vw, 65vh)',
-    backgroundImage: `url(${LOGO_URL})`,
-    backgroundSize: 'contain', backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'center',
-    opacity: 0.06, pointerEvents: 'none', zIndex: 0
-  }} />
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', position: 'relative' }}>
+      <div style={{
+        position: 'fixed', top: '50%', left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: 'min(65vw, 65vh)', height: 'min(65vw, 65vh)',
+        backgroundImage: `url(${LOGO_URL})`,
+        backgroundSize: 'contain', backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'center',
+        opacity: 0.06, pointerEvents: 'none', zIndex: 0
+      }} />
 
-      {/* NAV */}
       <nav style={s.nav}>
         <div style={s.navLogo}>Yoann <span style={{ color: GOLD }}>Desgrand</span></div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -82,35 +82,31 @@ export default function Dashboard({ profile, setProfile }) {
 
       <div style={s.container}>
 
-        {/* MESSAGE */}
         {msg && (
           <div style={{ ...s.msgBox, background: msg.type === 'success' ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)', borderColor: msg.type === 'success' ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.3)', color: msg.type === 'success' ? '#4ade80' : '#f87171' }}>
             {msg.text}
-            <button onClick={() => setMsg(null)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', marginLeft: 12 }}>×</button>
+            <button onClick={() => setMsg(null)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', marginLeft: 12 }}>x</button>
           </div>
         )}
 
-        {/* STATS GRID */}
         <div style={{ display: 'grid', gridTemplateColumns: hasPresentiel ? '1fr 2fr 1fr' : '2fr 1fr', gap: 16, marginBottom: 16 }}>
 
-          {/* Crédits — présentiel seulement */}
           {hasPresentiel && (
             <div style={s.statCard}>
-              <div style={s.statLabel}>Crédits</div>
+              <div style={s.statLabel}>Credits</div>
               <div style={{ ...s.statValue, color: profile.credits > 0 ? GOLD : '#f87171' }}>{profile.credits || 0}</div>
               <div style={s.statSub}>séances disponibles</div>
             </div>
           )}
 
-          {/* Prochaine séance */}
-          <div style={{ ...s.statCard }}>
+          <div style={s.statCard}>
             <div style={s.statLabel}>Prochaine séance</div>
             {nextBooking ? (
               <>
                 <div style={{ fontSize: 18, fontWeight: 500, margin: '8px 0 4px' }}>{formatDate(nextBooking.time_slots.start_time)}</div>
                 <div style={s.statSub}>{formatTime(nextBooking.time_slots.start_time)} — ON AIR BNF Paris 13e</div>
                 <button onClick={() => cancelBooking(nextBooking)} disabled={cancelling === nextBooking.id} style={s.btnCancel}>
-                  {cancelling === nextBooking.id ? '…' : 'Annuler (si > 12h avant)'}
+                  {cancelling === nextBooking.id ? '...' : 'Annuler (si > 12h avant)'}
                 </button>
               </>
             ) : (
@@ -123,20 +119,19 @@ export default function Dashboard({ profile, setProfile }) {
             )}
           </div>
 
-          {/* Abonnement */}
           <div style={s.statCard}>
             <div style={s.statLabel}>Mon abonnement</div>
             <div style={{ fontSize: 14, fontWeight: 500, margin: '8px 0' }}>{sub ? sub.label : 'Coaching'}</div>
             {sub?.price && (
               <div style={{ fontSize: 26, fontWeight: 600, color: GOLD, fontFamily: 'Outfit, sans-serif', margin: '4px 0' }}>
-                {sub.price}€<span style={{ fontSize: 13, fontWeight: 300, color: 'var(--muted)' }}>/mois</span>
+                {sub.price}<span style={{ fontSize: 16 }}>€</span><span style={{ fontSize: 13, fontWeight: 300, color: 'var(--muted)' }}>/mois</span>
               </div>
             )}
             {sub?.price && (
               <button
                 onClick={() => {
-                  const text = encodeURIComponent(`Bonjour Yoann, je souhaite résilier mon abonnement ${sub.label} à la fin du mois. Merci.`)
-                  window.open(`${WHATSAPP}?text=${text}`, '_blank')
+                  const text = encodeURIComponent('Bonjour Yoann, je souhaite résilier mon abonnement ' + sub.label + ' à la fin du mois. Merci.')
+                  window.open(WHATSAPP + '?text=' + text, '_blank')
                 }}
                 style={{ ...s.btnCancel, marginTop: 12, fontSize: 11 }}
               >
@@ -146,7 +141,6 @@ export default function Dashboard({ profile, setProfile }) {
           </div>
         </div>
 
-        {/* BARRE RÉSERVATION — présentiel avec crédits */}
         {hasPresentiel && profile.credits > 0 && (
           <div style={s.ctaBar}>
             <div>
@@ -155,11 +149,10 @@ export default function Dashboard({ profile, setProfile }) {
               </div>
               <div style={{ fontSize: 12, color: 'var(--muted)' }}>Réserve sur le calendrier de Yoann</div>
             </div>
-            <button onClick={() => window.open(CALENDLY_URL, '_blank')} style={s.btnGold}>Réserver →</button>
+            <button onClick={() => window.open(CALENDLY_URL, '_blank')} style={s.btnGold}>Réserver</button>
           </div>
         )}
 
-        {/* BARRE ZÉRO CRÉDIT — présentiel sans crédits */}
         {hasPresentiel && !profile.credits && (
           <div style={{ ...s.ctaBar, borderColor: 'rgba(248,113,113,0.2)', background: 'rgba(248,113,113,0.04)' }}>
             <div>
@@ -169,36 +162,40 @@ export default function Dashboard({ profile, setProfile }) {
           </div>
         )}
 
-        {/* ACHETER DES SÉANCES — présentiel seulement */}
         {hasPresentiel && (
           <div style={s.section}>
             <div style={s.sectionTitle}>Acheter des séances</div>
-            <div style={{ marginBottom: 20 }}>
-  
-    href={`${WHATSAPP}?text=Bonjour%20Yoann%2C%20je%20souhaite%20r%C3%A9server%20une%20s%C3%A9ance%20et%20r%C3%A9gler%20sur%20place.%20Peux-tu%20m%27ajouter%20un%20cr%C3%A9dit%20%3F`}
-    target="_blank"
-    style={{ ...s.btnGold, display: 'inline-block' }}
-  >
-    Payer sur place →
-  </a>
-  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>Espèces ou CB — Yoann t'ajoute le crédit après réception</div>
-</div>
+
+            <div style={{ marginBottom: 20, padding: '16px 20px', background: 'rgba(196,151,58,0.06)', border: '1px solid rgba(196,151,58,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Payer sur place</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>Espèces ou CB — Yoann t'ajoute le crédit après réception</div>
+              </div>
+              <a
+                href={WHATSAPP + '?text=Bonjour%20Yoann%2C%20je%20souhaite%20r%C3%A9server%20une%20s%C3%A9ance%20et%20r%C3%A9gler%20sur%20place.%20Peux-tu%20m%27ajouter%20un%20cr%C3%A9dit%20%3F'}
+                target="_blank"
+                style={s.btnGold}
+              >
+                Contacter Yoann
+              </a>
+            </div>
+
             {isAbonne && (
               <div style={{ fontSize: 12, color: GOLD, marginBottom: 20, padding: '8px 14px', background: 'rgba(196,151,58,0.08)', borderRadius: 6, border: '1px solid rgba(196,151,58,0.2)' }}>
                 Tarif abonné — séances à 50€ au lieu de 60€
               </div>
             )}
-            <div style={s.offresGrid}>
 
+            <div style={s.offresGrid}>
               <div style={s.offreCard}>
-                <div style={s.offreLabel}>À l'unité</div>
+                <div style={s.offreLabel}>A l'unité</div>
                 <div style={s.offreTitle}>Séance individuelle</div>
                 <div style={s.offrePrix}>
                   <span style={s.prixMain}>{isAbonne ? '50€' : '60€'}</span>
                   {isAbonne && <span style={s.prixBarre}>60€</span>}
                   <span style={s.prixPer}>/séance</span>
                 </div>
-                <a href={isAbonne ? STRIPE.seance_50 : STRIPE.seance_60} target="_blank" style={s.btnOffreGold}>Payer →</a>
+                <a href={isAbonne ? STRIPE.seance_50 : STRIPE.seance_60} target="_blank" style={s.btnOffreGold}>Payer</a>
                 <div style={s.offreNote}>ou espèces sur place</div>
               </div>
 
@@ -211,7 +208,7 @@ export default function Dashboard({ profile, setProfile }) {
                   <span style={s.prixPer}>{isAbonne ? '50€' : '55€'}/séance</span>
                 </div>
                 <div style={s.saving}>Économie {isAbonne ? '50€' : '25€'}</div>
-                <a href={isAbonne ? STRIPE.pack5_250 : STRIPE.pack5_275} target="_blank" style={s.btnOffreGold}>Acheter →</a>
+                <a href={isAbonne ? STRIPE.pack5_250 : STRIPE.pack5_275} target="_blank" style={s.btnOffreGold}>Acheter</a>
                 <div style={s.offreNote}>valable 3 mois</div>
               </div>
 
@@ -226,15 +223,13 @@ export default function Dashboard({ profile, setProfile }) {
                   <span style={s.prixPer}>50€/séance</span>
                 </div>
                 <div style={s.saving}>Économie 100€</div>
-                <a href={STRIPE.pack10} target="_blank" style={s.btnOffreGold}>Acheter →</a>
+                <a href={STRIPE.pack10} target="_blank" style={s.btnOffreGold}>Acheter</a>
                 <div style={s.offreNote}>valable 6 mois</div>
               </div>
-
             </div>
           </div>
         )}
 
-        {/* HISTORIQUE */}
         {bookings.length > 0 && (
           <div style={s.section}>
             <div style={s.sectionTitle}>Mes séances</div>
@@ -242,7 +237,7 @@ export default function Dashboard({ profile, setProfile }) {
               <div key={b.id} style={{ ...s.bookingRow, marginBottom: 8 }}>
                 <div>
                   <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 2 }}>{b.time_slots ? formatDate(b.time_slots.start_time) : 'Séance réservée'}</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{b.time_slots ? `${formatTime(b.time_slots.start_time)} — ON AIR BNF` : 'Horaire à confirmer'}</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{b.time_slots ? formatTime(b.time_slots.start_time) + ' — ON AIR BNF' : 'Horaire à confirmer'}</div>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 4, border: '1px solid rgba(74,222,128,0.3)', background: 'rgba(74,222,128,0.1)', color: '#4ade80' }}>Confirmé</span>
               </div>
@@ -250,13 +245,12 @@ export default function Dashboard({ profile, setProfile }) {
           </div>
         )}
 
-        {/* CONTACT */}
         <div style={s.infoBox}>
           <div style={{ fontSize: 20 }}>💬</div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Une question ?</div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>Contacte Yoann directement sur WhatsApp.</div>
-            <a href={`${WHATSAPP}?text=Bonjour%20Yoann%2C%20j%27ai%20une%20question.`} target="_blank" style={s.btnGold}>Envoyer un message</a>
+            <a href={WHATSAPP + '?text=Bonjour%20Yoann%2C%20j%27ai%20une%20question.'} target="_blank" style={s.btnGold}>Envoyer un message</a>
           </div>
         </div>
 
@@ -269,12 +263,12 @@ function formatDate(iso) {
   const d = new Date(iso)
   const DAYS = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi']
   const MONTHS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre']
-  return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`
+  return DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()]
 }
 
 function formatTime(iso) {
   const d = new Date(iso)
-  return `${d.getHours().toString().padStart(2,'0')}h${d.getMinutes().toString().padStart(2,'0')}`
+  return d.getHours().toString().padStart(2,'0') + 'h' + d.getMinutes().toString().padStart(2,'0')
 }
 
 const s = {
