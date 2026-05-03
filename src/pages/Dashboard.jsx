@@ -38,13 +38,13 @@ export default function Dashboard({ profile, setProfile }) {
   const [loadingSlots, setLoadingSlots] = useState(false)
 
   const sub = SUBSCRIPTIONS[profile.subscription_type] || null
-  const hasPresentiel = !profile.subscription_type || sub?.hasPresentiel
+  const hasPresentiel = !profile.subscription_type || sub?.hasPresentiel || profile.subscription_type === 'domicile'
   const hasOnline = sub?.hasOnline || false
   const isAbonne = hasOnline
 
   useEffect(() => {
     loadBookings()
-    if (hasPresentiel) loadSlots()
+    loadSlots()
   }, [])
 
   async function loadBookings() {
