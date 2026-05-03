@@ -36,6 +36,11 @@ export default function Dashboard({ profile, setProfile }) {
   const [cancelling, setCancelling] = useState(null)
   const [bookingSlot, setBookingSlot] = useState(null)
   const [loadingSlots, setLoadingSlots] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [editPhone, setEditPhone] = useState(profile.phone || '')
+  const [editEmail, setEditEmail] = useState(profile.email || '')
+  const [editAddress, setEditAddress] = useState(profile.address || '')
+  const [savingSettings, setSavingSettings] = useState(false)
 
   const sub = SUBSCRIPTIONS[profile.subscription_type] || null
   const hasPresentiel = !profile.subscription_type || sub?.hasPresentiel || profile.subscription_type === 'domicile'
@@ -131,6 +136,7 @@ export default function Dashboard({ profile, setProfile }) {
         <div style={s.navLogo}>Yoann <span style={{ color: GOLD }}>Desgrand</span></div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <span style={{ fontSize: 13, color: 'var(--muted)' }}>{profile.full_name || profile.email}</span>
+          <button onClick={() => { setShowSettings(true); setEditPhone(profile.phone || ''); setEditEmail(profile.email || ''); setEditAddress(profile.address || '') }} style={s.btnLogout} title="Paramètres">⚙️</button>
           <button onClick={() => supabase.auth.signOut()} style={s.btnLogout}>Déconnexion</button>
         </div>
       </nav>
@@ -379,6 +385,78 @@ export default function Dashboard({ profile, setProfile }) {
         </div>
 
       </div>
+
+      {/* MODAL PARAMÈTRES */}
+      {showSettings && (
+        <div style={s.settingsOverlay} onClick={() => setShowSettings(false)}>
+          <div style={s.settingsCard} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
+              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 22 }}>Mes paramètres</div>
+              <button onClick={() => setShowSettings(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer' }}>✕</button>
+            </div>
+
+            <div style={s.settingsField}>
+              <div style={s.settingsLabel}>Nom</div>
+              <div style={{ fontSize: 14, padding: '12px 0', color: 'var(--muted)' }}>{profile.full_name || '—'}</div>
+            </div>
+
+            <div style={s.settingsField}>
+              <div style={s.settingsLabel}>Email</div>
+              <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} style={s.settingsInput} />
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>Un email de confirmation sera envoyé à la nouvelle adresse.</div>
+            </div>
+
+            <div style={s.settingsField}>
+              <div style={s.settingsLabel}>Téléphone</div>
+              <input type="tel" value={editPhone} onChange={e => setEditPhone(e.target.value)} placeholder="06 12 34 56 78" style={s.settingsInput} />
+            </div>
+
+            {profile.coaching_type === 'domicile' && (
+              <div style={s.settingsField}>
+                <div style={s.settingsLabel}>Adresse domicile</div>
+                <input type="text" value={editAddress} onChange={e => setEditAddress(e.target.value)} placeholder="Ex: 39 rue Gustave Eiffel, Clichy" style={s.settingsInput} />
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>Utilisée pour calculer les temps de trajet de Yoann.</div>
+              </div>
+            )}
+
+            {profile.coaching_type === 'presentiel' && (
+              <div style={s.settingsField}>
+                <div style={s.settingsLabel}>Lieu de coaching</div>
+                <div style={{ fontSize: 13, padding: '12px 0', color: 'var(--muted)' }}>📍 ON AIR BNF — 93 avenue de France, Paris 13e</div>
+              </div>
+            )}
+
+            <button
+              onClick={async () => {
+                setSavingSettings(true)
+                const updates = { phone: editPhone.trim() }
+                if (profile.coaching_type === 'domicile') updates.address = editAddress.trim()
+
+                await supabase.from('profiles').update(updates).eq('id', profile.id)
+                setProfile(p => ({ ...p, ...updates }))
+
+                if (editEmail.trim() !== profile.email) {
+                  const { error } = await supabase.auth.updateUser({ email: editEmail.trim() })
+                  if (error) {
+                    setMsg({ type: 'error', text: 'Erreur lors du changement d\'email : ' + error.message })
+                  } else {
+                    setMsg({ type: 'success', text: 'Un email de confirmation a été envoyé à ' + editEmail.trim() })
+                  }
+                } else {
+                  setMsg({ type: 'success', text: 'Paramètres mis à jour.' })
+                }
+
+                setSavingSettings(false)
+                setShowSettings(false)
+              }}
+              disabled={savingSettings}
+              style={{ ...s.btnGold, width: '100%', marginTop: 8, textAlign: 'center' }}
+            >
+              {savingSettings ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -423,4 +501,9 @@ const s = {
   btnGold: { background:'#C4973A', color:'#000', border:'none', borderRadius:8, padding:'12px 24px', fontSize:13, fontWeight:500, cursor:'pointer', fontFamily:'Outfit, sans-serif', textDecoration:'none', display:'inline-block', whiteSpace:'nowrap' },
   btnCancel: { background:'transparent', color:'var(--muted)', border:'1px solid var(--border)', borderRadius:6, padding:'8px 14px', fontSize:12, cursor:'pointer', fontFamily:'Outfit, sans-serif', marginTop:10 },
   btnLogout: { background:'none', border:'1px solid var(--border)', color:'var(--muted)', borderRadius:6, padding:'7px 14px', fontSize:12, cursor:'pointer', fontFamily:'Outfit, sans-serif' },
+  settingsOverlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100 },
+  settingsCard: { background:'var(--surface)', border:'1px solid var(--border)', borderRadius:16, padding:'36px 32px', maxWidth:460, width:'90%', maxHeight:'85vh', overflowY:'auto' },
+  settingsField: { marginBottom:20 },
+  settingsLabel: { fontSize:11, fontWeight:600, letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)', marginBottom:6 },
+  settingsInput: { width:'100%', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:8, padding:'12px 14px', color:'var(--text)', fontSize:14, fontFamily:'Outfit, sans-serif', outline:'none', boxSizing:'border-box' },
 }
