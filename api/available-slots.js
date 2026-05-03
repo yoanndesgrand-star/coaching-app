@@ -165,7 +165,20 @@ export default async function handler(req, res) {
 
         if (hasConflict) { slotStart = new Date(slotStart.getTime() + incrementMs); continue }
 
-        slots.push({ start: slotStart.toISOString(), end: slotEnd.toISOString(), date: dateStr })
+        // Calculer le temps de trajet depuis la séance précédente pour coloriser
+        let travelMinutes = 0
+        const prevBooking = confirmedBookings
+          .filter(b => b.time_slots && new Date(b.time_slots.end_time) <= slotStart)
+          .sort((a, b) => new Date(b.time_slots.end_time) - new Date(a.time_slots.end_time))[0]
+
+        if (prevBooking && clientAddress) {
+          const prevAddress = prevBooking.profiles?.coaching_type === 'domicile' ? prevBooking.profiles?.address : ONAIR_ADDRESS
+          if (prevAddress && prevAddress !== clientAddress) {
+            try { travelMinutes = await getTravelMinutes(prevAddress, clientAddress) } catch(e) {}
+          }
+        }
+
+        slots.push({ start: slotStart.toISOString(), end: slotEnd.toISOString(), date: dateStr, travel_minutes: travelMinutes })
         slotStart = new Date(slotStart.getTime() + incrementMs)
       }
     }
