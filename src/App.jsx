@@ -41,9 +41,28 @@ export default function App() {
 
   async function fetchProfile(userId) {
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('profiles').select('*').eq('id', userId).single()
-      if (error) console.error('Profile error:', error)
+
+      // Si le profil n'existe pas, on le crée automatiquement
+      if (error && error.code === 'PGRST116') {
+        const { data: { user } } = await supabase.auth.getUser()
+        const { data: newProfile } = await supabase
+          .from('profiles')
+          .upsert({
+            id: userId,
+            email: user?.email || '',
+            full_name: user?.user_metadata?.full_name || '',
+            is_admin: false,
+            credits: 0,
+          }, { onConflict: 'id' })
+          .select()
+          .single()
+        data = newProfile
+      } else if (error) {
+        console.error('Profile error:', error)
+      }
+
       setProfile(data || null)
     } catch(e) {
       console.error(e)

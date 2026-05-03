@@ -50,12 +50,16 @@ export default function Login() {
         ? address.trim()
         : null
 
-      await supabase.from('profiles').update({
+      await supabase.from('profiles').upsert({
+        id: data.user.id,
+        email: email,
         full_name: `${firstName.trim()} ${lastName.trim()}`,
         phone: phone.trim(),
         coaching_type: coachingType,
         address: profileAddress,
-      }).eq('id', data.user.id)
+        is_admin: false,
+        credits: 0,
+      }, { onConflict: 'id' })
     }
 
     setSuccess('Compte créé ! Tu peux maintenant te connecter.')
