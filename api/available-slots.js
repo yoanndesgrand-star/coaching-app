@@ -7,14 +7,24 @@ const supabase = createClient(
 
 const ONAIR_ADDRESS = 'ON AIR BNF, 93 avenue de France, Paris 13'
 
+const travelCache = {}
 async function getTravelMinutes(origin, destination) {
+  if (!origin || !destination || origin === destination) return 0
+  const key = `${origin}|||${destination}`
+  if (travelCache[key] !== undefined) return travelCache[key]
   try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 5000)
     const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(origin)}&destinations=${encodeURIComponent(destination)}&mode=driving&key=${process.env.GOOGLE_MAPS_KEY}`
-    const res = await fetch(url)
+    const res = await fetch(url, { signal: controller.signal })
+    clearTimeout(timeout)
     const data = await res.json()
     const duration = data?.rows?.[0]?.elements?.[0]?.duration?.value
-    return duration ? Math.ceil(duration / 60) : 15
+    const mins = duration ? Math.ceil(duration / 60) : 15
+    travelCache[key] = mins
+    return mins
   } catch (e) {
+    travelCache[key] = 15
     return 15
   }
 }
