@@ -4,10 +4,17 @@ const GOLD = '#C4973A'
 const MONTHS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
 const DAYS_SHORT = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam']
 
-function getSlotColor(travelMinutes) {
-  if (travelMinutes === 0) return { bg: 'rgba(74,222,128,0.15)', border: 'rgba(74,222,128,0.4)', text: '#4ade80' }
-  if (travelMinutes < 15) return { bg: 'rgba(74,222,128,0.15)', border: 'rgba(74,222,128,0.4)', text: '#4ade80' }
-  if (travelMinutes < 30) return { bg: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.4)', text: '#fbbf24' }
+function getSlotColor(slot) {
+  const margin = slot.margin_minutes ?? 999
+  const travel = slot.travel_minutes || 0
+
+  // Pas de trajet ou pas d'événement avant → vert
+  if (travel === 0 || margin >= 999) return { bg: 'rgba(74,222,128,0.15)', border: 'rgba(74,222,128,0.4)', text: '#4ade80' }
+  // Marge confortable (≥ 10 min après trajet) → vert
+  if (margin >= 10) return { bg: 'rgba(74,222,128,0.15)', border: 'rgba(74,222,128,0.4)', text: '#4ade80' }
+  // Marge serrée (0-10 min) → orange
+  if (margin >= 0) return { bg: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.4)', text: '#fbbf24' }
+  // Marge négative (pas assez de temps) → rouge
   return { bg: 'rgba(248,113,113,0.15)', border: 'rgba(248,113,113,0.4)', text: '#f87171' }
 }
 
@@ -162,7 +169,7 @@ export default function BookingCalendar({ profile, onBooked }) {
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20 }}>
                   {daySlots.map(slot => {
-                    const color = getSlotColor(slot.travel_minutes || 0)
+                    const color = getSlotColor(slot)
                     return (
                       <button
                         key={slot.start}

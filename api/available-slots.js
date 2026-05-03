@@ -281,7 +281,14 @@ export default async function handler(req, res) {
           try { travelMinutes = await getTravelMinutes(prevAddress, clientAddress) } catch(e) {}
         }
 
-        slots.push({ start: slotStart.toISOString(), end: slotEnd.toISOString(), date: dateStr, travel_minutes: travelMinutes })
+        // Marge = temps entre fin de la séance précédente et début de ce créneau, moins le trajet
+        let marginMinutes = 999
+        if (prevEnd && travelMinutes > 0) {
+          const gapMinutes = (slotStart - prevEnd) / 60000
+          marginMinutes = Math.round(gapMinutes - travelMinutes)
+        }
+
+        slots.push({ start: slotStart.toISOString(), end: slotEnd.toISOString(), date: dateStr, travel_minutes: travelMinutes, margin_minutes: marginMinutes })
         slotStart = new Date(slotStart.getTime() + incrementMs)
       }
     }
