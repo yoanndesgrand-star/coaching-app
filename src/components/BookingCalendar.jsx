@@ -227,6 +227,21 @@ export default function BookingCalendar({ profile, onBooked }) {
         </>
       )}
 
+      {/* LÉGENDE COULEURS */}
+      {slots.length > 0 && (
+        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', padding: '12px 0 4px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#4ade80' }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#4ade80' }} /> Idéal — Yoann est dans le quartier
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#fbbf24' }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fbbf24' }} /> Trajet modéré
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#f87171' }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#f87171' }} /> Long trajet — privilégie un vert
+          </div>
+        </div>
+      )}
+
       {/* MODAL CONFIRMATION */}
       {confirmSlot && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }} onClick={() => setConfirmSlot(null)}>

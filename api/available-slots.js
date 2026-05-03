@@ -165,8 +165,14 @@ export default async function handler(req, res) {
 
       // Limiter à 8 lieux max pour éviter le timeout Vercel (10s)
       const locations = [...uniqueLocations].slice(0, 8)
-      await Promise.all(locations.map(loc => getTravelMinutes(loc, clientAddress)))
-      console.log('Pre-calculated travel for', locations.length, 'locations')
+      // Calculer dans les DEUX directions (vers client ET depuis client)
+      const promises = []
+      for (const loc of locations) {
+        promises.push(getTravelMinutes(loc, clientAddress))
+        promises.push(getTravelMinutes(clientAddress, loc))
+      }
+      await Promise.all(promises)
+      console.log('Pre-calculated travel for', locations.length, 'locations (both directions)')
     }
 
     // Générer les créneaux
@@ -293,14 +299,39 @@ export default async function handler(req, res) {
           travelMinutes = travelCache[`${prevAddress}|||${clientAddress}`] ?? 20
         }
 
-        // Marge = temps entre fin de la séance précédente et début de ce créneau, moins le trajet
-        let marginMinutes = 999
-        if (prevEnd && travelMinutes > 0) {
-          const gapMinutes = (slotStart - prevEnd) / 60000
-          marginMinutes = Math.round(gapMinutes - travelMinutes)
+        // Calculer aussi le trajet VERS l'événement suivant (réservation OU Google Calendar)
+        let nextTravelMinutes = 0
+
+        const nextBooking = confirmedBookings
+          .filter(b => b.time_slots && new Date(b.time_slots.start_time) >= slotEnd)
+          .sort((a, b) => new Date(a.time_slots.start_time) - new Date(b.time_slots.start_time))[0]
+
+        const nextGoogle = googleBusy
+          .filter(g => g.start >= slotEnd)
+          .sort((a, b) => a.start - b.start)[0]
+
+        let nextAddress = null
+        if (nextBooking && nextGoogle) {
+          const bookStart = new Date(nextBooking.time_slots.start_time)
+          if (bookStart < nextGoogle.start) {
+            nextAddress = nextBooking.profiles?.coaching_type === 'domicile' ? nextBooking.profiles?.address : ONAIR_ADDRESS
+          } else {
+            nextAddress = nextGoogle.location
+          }
+        } else if (nextBooking) {
+          nextAddress = nextBooking.profiles?.coaching_type === 'domicile' ? nextBooking.profiles?.address : ONAIR_ADDRESS
+        } else if (nextGoogle) {
+          nextAddress = nextGoogle.location
         }
 
-        slots.push({ start: slotStart.toISOString(), end: slotEnd.toISOString(), date: dateStr, travel_minutes: travelMinutes, margin_minutes: marginMinutes })
+        if (nextAddress && clientAddress && nextAddress !== clientAddress) {
+          nextTravelMinutes = travelCache[`${clientAddress}|||${nextAddress}`] ?? 20
+        }
+
+        // La couleur = le PIRE des deux trajets (avant et après)
+        const maxTravel = Math.max(travelMinutes, nextTravelMinutes)
+
+        slots.push({ start: slotStart.toISOString(), end: slotEnd.toISOString(), date: dateStr, travel_minutes: maxTravel })
         slotStart = new Date(slotStart.getTime() + incrementMs)
       }
     }
