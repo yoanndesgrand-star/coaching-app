@@ -52,7 +52,7 @@ export default async function handler(req, res) {
       })
       const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
       await calendar.events.insert({
-        calendarId: 'primary',
+        calendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
         requestBody: {
           summary: 'YD Coaching - ' + (profile.full_name || profile.email),
           start: { dateTime: startTime },

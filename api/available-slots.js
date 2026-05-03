@@ -64,7 +64,7 @@ export default async function handler(req, res) {
         })
         const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
         const eventsRes = await calendar.events.list({
-          calendarId: 'primary',
+          calendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
           timeMin: startDate.toISOString(),
           timeMax: new Date(targetYear, targetMonth, 1).toISOString(),
           singleEvents: true

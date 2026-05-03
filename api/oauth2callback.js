@@ -30,7 +30,7 @@ export default async function handler(req, res) {
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
     const watchRes = await calendar.events.watch({
-      calendarId: 'primary',
+      calendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
       requestBody: {
         id: 'yd-coaching-' + Date.now(),
         type: 'web_hook',
