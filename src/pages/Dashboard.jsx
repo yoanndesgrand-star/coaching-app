@@ -7,21 +7,25 @@ const WHATSAPP = 'https://wa.me/33687207855'
 const LOGO_URL = '/logo-yd.png'
 
 const STRIPE = {
-  seance_60:  'https://buy.stripe.com/28E5kCcMB9mWaR8d7M5Rm00',
-  seance_50:  'https://buy.stripe.com/4gM6oG4g5dDc9N45Fk5Rm06',
-  pack5_275:  'https://buy.stripe.com/4gM14m5k98iSbVcaZE5Rm01',
-  pack5_250:  'https://buy.stripe.com/00waEWcMB9mW1gy5Fk5Rm07',
-  pack10:     'https://buy.stripe.com/dRm9ASh2RgPo5wOaZE5Rm02',
+  seance_60:   'https://buy.stripe.com/28E5kCcMB9mWaR8d7M5Rm00',
+  seance_50:   'https://buy.stripe.com/4gM6oG4g5dDc9N45Fk5Rm06',
+  pack5_275:   'https://buy.stripe.com/4gM14m5k98iSbVcaZE5Rm01',
+  pack5_250:   'https://buy.stripe.com/00waEWcMB9mW1gy5Fk5Rm07',
+  pack10:      'https://buy.stripe.com/dRm9ASh2RgPo5wOaZE5Rm02',
+  sport:       'https://buy.stripe.com/eVq14m13TdDc1gy0l05Rm03',
+  nutrition:   'https://buy.stripe.com/fZu6oG8wlar0aR83xc5Rm04',
+  sport_nutri: 'https://buy.stripe.com/00w6oGh2RdDc5wO2t85Rm05',
 }
 
 const SUBSCRIPTIONS = {
-  presentiel:                 { label: 'Présentiel',                     price: null, hasPresentiel: true,  hasOnline: false },
-  sport_online:               { label: 'Sport en ligne',                  price: 59,   hasPresentiel: false, hasOnline: true  },
-  nutrition:                  { label: 'Nutrition',                       price: 119,  hasPresentiel: false, hasOnline: true  },
-  sport_nutrition:            { label: 'Sport + Nutrition',               price: 149,  hasPresentiel: false, hasOnline: true  },
-  presentiel_sport:           { label: 'Présentiel + Sport',              price: 59,   hasPresentiel: true,  hasOnline: true  },
-  presentiel_nutrition:       { label: 'Présentiel + Nutrition',          price: 119,  hasPresentiel: true,  hasOnline: true  },
-  presentiel_sport_nutrition: { label: 'Présentiel + Sport + Nutrition',  price: 149,  hasPresentiel: true,  hasOnline: true  },
+  presentiel:                 { label: 'Présentiel',                    price: null, hasPresentiel: true,  hasOnline: false },
+  domicile:                   { label: 'Coaching à domicile',           price: null, hasPresentiel: false, hasOnline: false },
+  sport_online:               { label: 'Sport en ligne',                price: 59,   hasPresentiel: false, hasOnline: true  },
+  nutrition:                  { label: 'Nutrition',                     price: 119,  hasPresentiel: false, hasOnline: true  },
+  sport_nutrition:            { label: 'Sport + Nutrition',             price: 149,  hasPresentiel: false, hasOnline: true  },
+  presentiel_sport:           { label: 'Présentiel + Sport',            price: 59,   hasPresentiel: true,  hasOnline: true  },
+  presentiel_nutrition:       { label: 'Présentiel + Nutrition',        price: 119,  hasPresentiel: true,  hasOnline: true  },
+  presentiel_sport_nutrition: { label: 'Présentiel + Sport + Nutrition',price: 149,  hasPresentiel: true,  hasOnline: true  },
 }
 
 export default function Dashboard({ profile, setProfile }) {
@@ -66,7 +70,7 @@ export default function Dashboard({ profile, setProfile }) {
         position: 'fixed', top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
         width: 'min(65vw, 65vh)', height: 'min(65vw, 65vh)',
-        backgroundImage: `url(${LOGO_URL})`,
+        backgroundImage: 'url(' + LOGO_URL + ')',
         backgroundSize: 'contain', backgroundRepeat: 'no-repeat',
         backgroundPosition: 'center',
         opacity: 0.06, pointerEvents: 'none', zIndex: 0
@@ -89,11 +93,12 @@ export default function Dashboard({ profile, setProfile }) {
           </div>
         )}
 
+        {/* STATS */}
         <div style={{ display: 'grid', gridTemplateColumns: hasPresentiel ? '1fr 2fr 1fr' : '2fr 1fr', gap: 16, marginBottom: 16 }}>
 
           {hasPresentiel && (
             <div style={s.statCard}>
-              <div style={s.statLabel}>Credits</div>
+              <div style={s.statLabel}>Crédits</div>
               <div style={{ ...s.statValue, color: profile.credits > 0 ? GOLD : '#f87171' }}>{profile.credits || 0}</div>
               <div style={s.statSub}>séances disponibles</div>
             </div>
@@ -110,16 +115,13 @@ export default function Dashboard({ profile, setProfile }) {
                 </button>
               </>
             ) : (
-              <>
-                <div style={{ fontSize: 13, color: 'var(--muted)', margin: '12px 0' }}>Aucune séance prévue</div>
-                
-              </>
+              <div style={{ fontSize: 13, color: 'var(--muted)', margin: '12px 0' }}>Aucune séance prévue</div>
             )}
           </div>
 
           <div style={s.statCard}>
             <div style={s.statLabel}>Mon abonnement</div>
-            <div style={{ fontSize: 14, fontWeight: 500, margin: '8px 0' }}>{sub ? sub.label : 'Coaching'}</div>
+            <div style={{ fontSize: 14, fontWeight: 500, margin: '8px 0' }}>{sub ? sub.label : '— Aucun —'}</div>
             {sub?.price && (
               <div style={{ fontSize: 26, fontWeight: 600, color: GOLD, fontFamily: 'Outfit, sans-serif', margin: '4px 0' }}>
                 {sub.price}<span style={{ fontSize: 16 }}>€</span><span style={{ fontSize: 13, fontWeight: 300, color: 'var(--muted)' }}>/mois</span>
@@ -139,6 +141,7 @@ export default function Dashboard({ profile, setProfile }) {
           </div>
         </div>
 
+        {/* BARRE RÉSERVATION */}
         {hasPresentiel && profile.credits > 0 && (
           <div style={s.ctaBar}>
             <div>
@@ -160,6 +163,7 @@ export default function Dashboard({ profile, setProfile }) {
           </div>
         )}
 
+        {/* ACHETER DES SÉANCES — présentiel seulement */}
         {hasPresentiel && (
           <div style={s.section}>
             <div style={s.sectionTitle}>Acheter des séances</div>
@@ -169,11 +173,7 @@ export default function Dashboard({ profile, setProfile }) {
                 <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Payer sur place</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>Espèces ou CB — Yoann t'ajoute le crédit après réception</div>
               </div>
-              <a
-                href={WHATSAPP + '?text=Bonjour%20Yoann%2C%20je%20souhaite%20r%C3%A9server%20une%20s%C3%A9ance%20et%20r%C3%A9gler%20sur%20place.%20Peux-tu%20m%27ajouter%20un%20cr%C3%A9dit%20%3F'}
-                target="_blank"
-                style={s.btnGold}
-              >
+              <a href={WHATSAPP + '?text=Bonjour%20Yoann%2C%20je%20souhaite%20r%C3%A9server%20une%20s%C3%A9ance%20et%20r%C3%A9gler%20sur%20place.%20Peux-tu%20m%27ajouter%20un%20cr%C3%A9dit%20%3F'} target="_blank" style={s.btnGold}>
                 Contacter Yoann
               </a>
             </div>
@@ -228,6 +228,60 @@ export default function Dashboard({ profile, setProfile }) {
           </div>
         )}
 
+        {/* ABONNEMENTS EN LIGNE */}
+        {!hasOnline && (
+          <div style={s.section}>
+            <div style={s.sectionTitle}>Coaching en ligne</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24 }}>
+              Programmes personnalisés — sport, nutrition ou les deux. Accès à ton espace client, suivi hebdomadaire avec Yoann.
+            </div>
+            <div style={s.offresGrid}>
+
+              <div style={s.offreCard}>
+                <div style={s.offreLabel}>Programme</div>
+                <div style={s.offreTitle}>Sport en ligne</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Programme d'entraînement 100% personnalisé + suivi hebdomadaire</div>
+                <div style={s.offrePrix}>
+                  <span style={s.prixMain}>59€</span>
+                  <span style={s.prixPer}>/mois</span>
+                </div>
+                <a href={STRIPE.sport} target="_blank" style={s.btnOffreGold}>Souscrire</a>
+              </div>
+
+              <div style={s.offreCard}>
+                <div style={s.offreLabel}>Programme</div>
+                <div style={s.offreTitle}>Nutrition</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Plan nutritionnel personnalisé + suivi et ajustements mensuels</div>
+                <div style={s.offrePrix}>
+                  <span style={s.prixMain}>119€</span>
+                  <span style={s.prixPer}>/mois</span>
+                </div>
+                <a href={STRIPE.nutrition} target="_blank" style={s.btnOffreGold}>Souscrire</a>
+              </div>
+
+              <div style={{ ...s.offreCard, borderColor: 'rgba(196,151,58,0.4)', background: 'linear-gradient(135deg, #161410 0%, var(--surface) 100%)', position: 'relative' }}>
+                <div style={{ position: 'absolute', top: -1, left: '50%', transform: 'translateX(-50%)', background: GOLD, color: '#000', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', padding: '3px 10px', borderRadius: '0 0 6px 6px' }}>
+                  POPULAIRE
+                </div>
+                <div style={s.offreLabel}>Programme complet</div>
+                <div style={s.offreTitle}>Sport + Nutrition</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Entraînement + nutrition + suivi complet</div>
+                <div style={s.offrePrix}>
+                  <span style={s.prixMain}>149€</span>
+                  <span style={s.prixPer}>/mois</span>
+                </div>
+                <div style={s.saving}>Économie 29€</div>
+                <a href={STRIPE.sport_nutri} target="_blank" style={s.btnOffreGold}>Souscrire</a>
+              </div>
+
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 16, textAlign: 'center' }}>
+              Après paiement, Yoann te contacte sous 24h pour démarrer ton programme.
+            </div>
+          </div>
+        )}
+
+        {/* HISTORIQUE */}
         {bookings.length > 0 && (
           <div style={s.section}>
             <div style={s.sectionTitle}>Mes séances</div>
@@ -243,6 +297,7 @@ export default function Dashboard({ profile, setProfile }) {
           </div>
         )}
 
+        {/* CONTACT */}
         <div style={s.infoBox}>
           <div style={{ fontSize: 20 }}>💬</div>
           <div>
