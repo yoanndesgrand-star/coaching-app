@@ -209,6 +209,27 @@ export default async function handler(req, res) {
       console.log('Google Calendar error:', e.message)
     }
 
+    // Pré-calculer tous les trajets en parallèle (évite le timeout)
+    if (clientAddress) {
+      const uniqueLocations = new Set()
+      
+      // Lieux des événements Google Calendar
+      for (const g of googleBusy) {
+        if (g.location && g.location !== clientAddress) uniqueLocations.add(g.location)
+      }
+      // Lieux des réservations
+      for (const b of confirmedBookings) {
+        if (!b.profiles) continue
+        const addr = b.profiles.coaching_type === 'domicile' ? b.profiles.address : ONAIR_ADDRESS
+        if (addr && addr !== clientAddress) uniqueLocations.add(addr)
+      }
+
+      // Calculer tous les trajets en parallèle
+      const travelPromises = [...uniqueLocations].map(loc => getTravelMinutes(loc, clientAddress))
+      await Promise.all(travelPromises)
+      console.log('Pre-calculated travel for', uniqueLocations.size, 'locations')
+    }
+
     // Générer les créneaux
     const slots = []
     const today = new Date()
