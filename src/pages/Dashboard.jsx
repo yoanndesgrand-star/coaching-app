@@ -35,6 +35,8 @@ export default function Dashboard({ profile, setProfile }) {
   const [editEmail, setEditEmail] = useState(profile.email || '')
   const [editAddress, setEditAddress] = useState(profile.address || '')
   const [savingSettings, setSavingSettings] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
 
   const sub = SUBSCRIPTIONS[profile.subscription_type] || SUBSCRIPTIONS[profile.coaching_type] || null
 
@@ -258,6 +260,10 @@ export default function Dashboard({ profile, setProfile }) {
               {profile.coaching_type === 'presentiel' && (
                 <div style={s.settingsField}><div style={s.settingsLabel}>Lieu</div><div style={{ fontSize: 13, padding: '12px 0', color: 'var(--muted)' }}>📍 ON AIR BNF — 93 av. de France, Paris 13e</div></div>
               )}
+              <div style={{ borderTop: '1px solid var(--border)', margin: '20px 0', paddingTop: 20 }}>
+                <div style={s.settingsField}><div style={s.settingsLabel}>Nouveau mot de passe</div><input type="password" value={newPassword} onChange={function(e) { setNewPassword(e.target.value) }} placeholder="Laisser vide pour ne pas changer" style={s.settingsInput} /></div>
+                <div style={s.settingsField}><div style={s.settingsLabel}>Confirmer le mot de passe</div><input type="password" value={confirmPassword} onChange={function(e) { setConfirmPassword(e.target.value) }} placeholder="Confirmer le nouveau mot de passe" style={s.settingsInput} /></div>
+              </div>
               <button onClick={async function() {
                 setSavingSettings(true)
                 var updates = { phone: editPhone.trim() }
@@ -265,10 +271,25 @@ export default function Dashboard({ profile, setProfile }) {
                 await supabase.from('profiles').update(updates).eq('id', profile.id)
                 setProfile(function(p) { return Object.assign({}, p, updates) })
                 if (editEmail.trim() !== profile.email) {
-                  var { error } = await supabase.auth.updateUser({ email: editEmail.trim() })
-                  if (error) setMsg({ type: 'error', text: 'Erreur : ' + error.message })
+                  var res1 = await supabase.auth.updateUser({ email: editEmail.trim() })
+                  if (res1.error) setMsg({ type: 'error', text: 'Erreur email : ' + res1.error.message })
                   else setMsg({ type: 'success', text: 'Confirmation envoyée à ' + editEmail.trim() })
-                } else { setMsg({ type: 'success', text: 'Paramètres mis à jour.' }) }
+                }
+                if (newPassword) {
+                  if (newPassword.length < 6) {
+                    setMsg({ type: 'error', text: 'Le mot de passe doit faire au moins 6 caractères.' })
+                    setSavingSettings(false); return
+                  }
+                  if (newPassword !== confirmPassword) {
+                    setMsg({ type: 'error', text: 'Les mots de passe ne correspondent pas.' })
+                    setSavingSettings(false); return
+                  }
+                  var res2 = await supabase.auth.updateUser({ password: newPassword })
+                  if (res2.error) { setMsg({ type: 'error', text: 'Erreur mot de passe : ' + res2.error.message }); setSavingSettings(false); return }
+                  setNewPassword(''); setConfirmPassword('')
+                  setMsg({ type: 'success', text: 'Mot de passe mis à jour.' })
+                }
+                if (!msg) setMsg({ type: 'success', text: 'Paramètres mis à jour.' })
                 setSavingSettings(false); setView('home')
               }} disabled={savingSettings} style={{ ...s.btnGold, width: '100%', marginTop: 8, textAlign: 'center' }}>
                 {savingSettings ? 'Enregistrement…' : 'Enregistrer'}
