@@ -38,7 +38,7 @@ async function getTravelMinutes(origin, destination) {
       return 20
     }
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 5000)
+    const timeout = setTimeout(() => controller.abort(), 2000)
     const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(origin)}&destinations=${encodeURIComponent(destination)}&mode=driving&key=${apiKey}`
     const res = await fetch(url, { signal: controller.signal })
     clearTimeout(timeout)
@@ -224,10 +224,10 @@ export default async function handler(req, res) {
         if (addr && addr !== clientAddress) uniqueLocations.add(addr)
       }
 
-      // Calculer tous les trajets en parallèle
-      const travelPromises = [...uniqueLocations].map(loc => getTravelMinutes(loc, clientAddress))
-      await Promise.all(travelPromises)
-      console.log('Pre-calculated travel for', uniqueLocations.size, 'locations')
+      // Limiter à 8 lieux max pour éviter le timeout Vercel (10s)
+      const locations = [...uniqueLocations].slice(0, 8)
+      await Promise.all(locations.map(loc => getTravelMinutes(loc, clientAddress)))
+      console.log('Pre-calculated travel for', locations.length, 'locations')
     }
 
     // Générer les créneaux
