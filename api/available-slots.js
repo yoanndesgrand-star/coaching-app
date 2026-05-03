@@ -83,7 +83,11 @@ export default async function handler(req, res) {
         })
         googleBusy = (eventsRes.data.items || [])
           .filter(e => e.start?.dateTime && e.status !== 'cancelled')
-          .map(e => ({ start: new Date(e.start.dateTime), end: new Date(e.end.dateTime) }))
+          .map(e => ({ 
+            start: new Date(e.start.dateTime), 
+            end: new Date(e.end.dateTime),
+            location: e.location || null
+          }))
       }
     } catch (e) {
       console.log('Google Calendar error:', e.message)
@@ -129,12 +133,23 @@ export default async function handler(req, res) {
         if (partBlock) { slotStart = new Date(slotStart.getTime() + incrementMs); continue }
 
         // Conflit Google Calendar
-        const gConflict = googleBusy.find(b => {
-          const bS = new Date(b.start.getTime() - bufferMinutes * 60000)
-          const bE = new Date(b.end.getTime() + bufferMinutes * 60000)
-          return slotStart < bE && slotEnd > bS
-        })
-        if (gConflict) { slotStart = new Date(gConflict.end.getTime() + bufferMinutes * 60000); continue }
+        // Conflit Google Calendar avec calcul de trajet si location disponible
+        let gConflict = null
+        let gBufferMs = bufferMinutes * 60000
+        for (const b of googleBusy) {
+          let dynBuffer = bufferMinutes
+          if (clientAddress && b.location) {
+            try {
+              const travel = await getTravelMinutes(b.location, clientAddress)
+              dynBuffer = travel + bufferMinutes
+            } catch(e) {}
+          }
+          const bMs = dynBuffer * 60000
+          const bS = new Date(b.start.getTime() - bMs)
+          const bE = new Date(b.end.getTime() + bMs)
+          if (slotStart < bE && slotEnd > bS) { gConflict = b; gBufferMs = bMs; break }
+        }
+        if (gConflict) { slotStart = new Date(gConflict.end.getTime() + gBufferMs); continue }
 
         // Conflit réservations avec calcul de trajet
         let hasConflict = false
