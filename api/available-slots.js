@@ -222,15 +222,18 @@ export default async function handler(req, res) {
 
         // Conflit Google Calendar (utilise le cache pré-calculé)
         let gConflict = null
-        let gTravelMs = 0
+        let gTravelAfterMs = 0
         for (const b of googleBusy) {
-          const dynTravel = (clientAddress && b.location) ? (travelCache[`${b.location}|||${clientAddress}`] ?? 20) : 0
-          const tMs = dynTravel * 60000
-          const bE = new Date(b.end.getTime() + tMs)
-          if (slotStart < bE && slotEnd > new Date(b.start.getTime() - tMs)) { gConflict = b; gTravelMs = tMs; break }
+          // Trajet event → client (pour bloquer APRÈS l'événement)
+          const travelAfter = (clientAddress && b.location) ? (travelCache[`${b.location}|||${clientAddress}`] ?? 20) : 0
+          // Trajet client → event (pour bloquer AVANT l'événement)
+          const travelBefore = (clientAddress && b.location) ? (travelCache[`${clientAddress}|||${b.location}`] ?? 20) : 0
+          const bE = new Date(b.end.getTime() + travelAfter * 60000)
+          const bS = new Date(b.start.getTime() - travelBefore * 60000)
+          if (slotStart < bE && slotEnd > bS) { gConflict = b; gTravelAfterMs = travelAfter * 60000; break }
         }
         if (gConflict) {
-          const newStart = roundUpToQuarter(new Date(gConflict.end.getTime() + gTravelMs))
+          const newStart = roundUpToQuarter(new Date(gConflict.end.getTime() + gTravelAfterMs))
           slotStart = newStart > slotStart ? newStart : new Date(slotStart.getTime() + incrementMs)
           continue
         }
@@ -242,18 +245,16 @@ export default async function handler(req, res) {
           const bStart = new Date(b.time_slots.start_time)
           const bEnd = new Date(b.time_slots.end_time)
 
-          let dynamicTravel = 0
-          if (clientAddress) {
-            const prevAddress = b.profiles?.coaching_type === 'domicile' ? b.profiles?.address : ONAIR_ADDRESS
-            if (prevAddress && prevAddress !== clientAddress) {
-              dynamicTravel = travelCache[`${prevAddress}|||${clientAddress}`] ?? 20
-            }
-          }
+          const prevAddress = b.profiles?.coaching_type === 'domicile' ? b.profiles?.address : ONAIR_ADDRESS
+          // Trajet booking → client (après la réservation)
+          const travelAfter = (clientAddress && prevAddress && prevAddress !== clientAddress) ? (travelCache[`${prevAddress}|||${clientAddress}`] ?? 20) : 0
+          // Trajet client → booking (avant la réservation)
+          const travelBefore = (clientAddress && prevAddress && prevAddress !== clientAddress) ? (travelCache[`${clientAddress}|||${prevAddress}`] ?? 20) : 0
 
-          const bufMs = dynamicTravel * 60000
-          const bS = new Date(bStart.getTime() - bufMs)
-          const bE = new Date(bEnd.getTime() + bufMs)
+          const bS = new Date(bStart.getTime() - travelBefore * 60000)
+          const bE = new Date(bEnd.getTime() + travelAfter * 60000)
           if (slotStart < bE && slotEnd > bS) { hasConflict = true; break }
+        }
         }
 
         if (hasConflict) {
