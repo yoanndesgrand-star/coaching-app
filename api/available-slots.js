@@ -79,8 +79,20 @@ export default async function handler(req, res) {
     const clientProfile = clientRes.data
 
     const sessionMs = (settings.session_duration || 60) * 60 * 1000
-    const bufferMinutes = settings.buffer_time || 10
-    const incrementMs = (settings.slot_increment || 60) * 60 * 1000
+    const incrementMs = 15 * 60 * 1000 // Créneaux tous les 15 min
+
+    // Arrondir au quart d'heure supérieur
+    function roundUpToQuarter(date) {
+      const d = new Date(date)
+      const min = d.getMinutes()
+      const remainder = min % 15
+      if (remainder > 0) {
+        d.setMinutes(min + (15 - remainder), 0, 0)
+      } else {
+        d.setSeconds(0, 0)
+      }
+      return d
+    }
 
     // Adresse du client demandeur
     const clientAddress = clientProfile?.coaching_type === 'domicile' ? clientProfile?.address : ONAIR_ADDRESS
@@ -178,6 +190,7 @@ export default async function handler(req, res) {
 
       let slotStart = new Date(date)
       slotStart.setUTCHours(startH - parisOffset, startM, 0, 0)
+      slotStart = roundUpToQuarter(slotStart)
       const dayEnd = new Date(date)
       dayEnd.setUTCHours(endH - parisOffset, endM, 0, 0)
 
@@ -195,24 +208,22 @@ export default async function handler(req, res) {
         })
         if (partBlock) { slotStart = new Date(slotStart.getTime() + incrementMs); continue }
 
-        // Conflit Google Calendar
-        // Conflit Google Calendar avec calcul de trajet si location disponible
+        // Conflit Google Calendar avec calcul de trajet
         let gConflict = null
-        let gBufferMs = bufferMinutes * 60000
+        let gTravelMs = 0
         for (const b of googleBusy) {
-          let dynBuffer = bufferMinutes
+          let dynTravel = 0
           if (clientAddress && b.location) {
             try {
-              const travel = await getTravelMinutes(b.location, clientAddress)
-              dynBuffer = travel + bufferMinutes
+              dynTravel = await getTravelMinutes(b.location, clientAddress)
             } catch(e) {}
           }
-          const bMs = dynBuffer * 60000
-          const bS = new Date(b.start.getTime() - bMs)
-          const bE = new Date(b.end.getTime() + bMs)
-          if (slotStart < bE && slotEnd > bS) { gConflict = b; gBufferMs = bMs; break }
+          const tMs = dynTravel * 60000
+          const bS = new Date(b.start.getTime() - tMs)
+          const bE = new Date(b.end.getTime() + tMs)
+          if (slotStart < bE && slotEnd > bS) { gConflict = b; gTravelMs = tMs; break }
         }
-        if (gConflict) { slotStart = new Date(gConflict.end.getTime() + gBufferMs); continue }
+        if (gConflict) { slotStart = roundUpToQuarter(new Date(gConflict.end.getTime() + gTravelMs)); continue }
 
         // Conflit réservations avec calcul de trajet
         let hasConflict = false
@@ -221,8 +232,7 @@ export default async function handler(req, res) {
           const bStart = new Date(b.time_slots.start_time)
           const bEnd = new Date(b.time_slots.end_time)
 
-          // Calculer le tampon dynamique selon les types de coaching
-          let dynamicBuffer = bufferMinutes
+          let dynamicTravel = 0
           if (clientAddress) {
             const prevAddress = b.profiles?.coaching_type === 'domicile' ? b.profiles?.address : ONAIR_ADDRESS
             const nextAddress = clientAddress
@@ -230,12 +240,12 @@ export default async function handler(req, res) {
             if (prevAddress && nextAddress && prevAddress !== nextAddress) {
               try {
                 const travelMins = await getTravelMinutes(prevAddress, nextAddress)
-                dynamicBuffer = travelMins + bufferMinutes
+                dynamicTravel = travelMins
               } catch (e) {}
             }
           }
 
-          const bufMs = dynamicBuffer * 60000
+          const bufMs = dynamicTravel * 60000
           const bS = new Date(bStart.getTime() - bufMs)
           const bE = new Date(bEnd.getTime() + bufMs)
           if (slotStart < bE && slotEnd > bS) { hasConflict = true; break }
