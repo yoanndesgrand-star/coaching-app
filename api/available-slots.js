@@ -32,6 +32,8 @@ export default async function handler(req, res) {
     const bufferMinutes = settingsData?.buffer_time || 10
     const sessionMs = sessionMinutes * 60 * 1000
     const bufferMs = bufferMinutes * 60 * 1000
+    const incrementMinutes = settingsData?.slot_increment || sessionMinutes
+    const incrementMs = incrementMinutes * 60 * 1000
 
     // Charger exceptions
     const { data: blockedPeriods } = await supabase
