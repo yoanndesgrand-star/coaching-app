@@ -75,5 +75,42 @@ export default async function handler(req, res) {
     console.error('Google Calendar:', e.message)
   }
 
+  // Notifier Yoann par email
+  try {
+    const startDate = new Date(startTime)
+    const DAYS = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi']
+    const MONTHS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre']
+    const dateStr = DAYS[startDate.getDay()] + ' ' + startDate.getDate() + ' ' + MONTHS[startDate.getMonth()]
+    const timeStr = startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
+    const locationStr = profile.coaching_type === 'domicile' ? ('🏠 ' + (profile.address || 'Domicile')) : '🏋️ ON AIR BNF'
+
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`
+      },
+      body: JSON.stringify({
+        from: process.env.EMAIL_FROM || 'Yoann Desgrand <onboarding@resend.dev>',
+        to: process.env.ADMIN_EMAIL || 'yoann.desgrand@gmail.com',
+        subject: `📅 Nouvelle réservation — ${profile.full_name || profile.email}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 450px; padding: 24px;">
+            <h2 style="margin: 0 0 16px;">Nouvelle réservation 🎯</h2>
+            <div style="background: #f5f5f5; border-radius: 10px; padding: 18px; margin-bottom: 16px;">
+              <div style="font-size: 16px; font-weight: bold; margin-bottom: 6px;">${profile.full_name || profile.email}</div>
+              <div style="margin-bottom: 4px;">📅 ${dateStr}</div>
+              <div style="margin-bottom: 4px;">🕐 ${timeStr}</div>
+              <div>${locationStr}</div>
+            </div>
+            <div style="font-size: 13px; color: #888;">Crédits restants du client : ${profile.credits - 1}</div>
+          </div>
+        `
+      })
+    })
+  } catch (e) {
+    console.error('Admin notification:', e.message)
+  }
+
   return res.status(200).json({ success: true, booking, creditsLeft: profile.credits - 1 })
 }
