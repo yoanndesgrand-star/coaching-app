@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 const GOLD = '#C4973A'
 
 const SUBSCRIPTION_TYPES = [
+  { value: 'domicile',                label: '🏠 Coaching à domicile',           price: null },
   { value: 'presentiel',              label: '🏋️ Présentiel seul',              price: null },
   { value: 'sport_online',            label: '📱 Sport en ligne',                price: '59€/mois' },
   { value: 'nutrition',               label: '🥗 Nutrition',                     price: '119€/mois' },
