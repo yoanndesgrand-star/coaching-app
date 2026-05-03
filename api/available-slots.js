@@ -31,19 +31,33 @@ async function getTravelMinutes(origin, destination) {
   const key = `${origin}|||${destination}`
   if (travelCache[key] !== undefined) return travelCache[key]
   try {
+    const apiKey = process.env.GOOGLE_MAPS_KEY
+    if (!apiKey) {
+      console.error('GOOGLE_MAPS_KEY not set!')
+      travelCache[key] = 20
+      return 20
+    }
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 5000)
-    const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(origin)}&destinations=${encodeURIComponent(destination)}&mode=driving&key=${process.env.GOOGLE_MAPS_KEY}`
+    const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(origin)}&destinations=${encodeURIComponent(destination)}&mode=driving&key=${apiKey}`
     const res = await fetch(url, { signal: controller.signal })
     clearTimeout(timeout)
     const data = await res.json()
-    const duration = data?.rows?.[0]?.elements?.[0]?.duration?.value
-    const mins = duration ? Math.ceil(duration / 60) : 15
+    console.log('Travel:', origin, '→', destination, '=', JSON.stringify(data?.rows?.[0]?.elements?.[0]))
+    const element = data?.rows?.[0]?.elements?.[0]
+    if (element?.status !== 'OK') {
+      console.error('Maps API error:', element?.status)
+      travelCache[key] = 20
+      return 20
+    }
+    const duration = element.duration?.value
+    const mins = duration ? Math.ceil(duration / 60) : 20
     travelCache[key] = mins
     return mins
   } catch (e) {
-    travelCache[key] = 15
-    return 15
+    console.error('Travel fetch error:', e.message)
+    travelCache[key] = 20
+    return 20
   }
 }
 
@@ -253,7 +267,7 @@ export default async function handler(req, res) {
           const tMs = dynTravel * 60000
           const bS = new Date(b.start.getTime() - tMs)
           const bE = new Date(b.end.getTime() + tMs)
-          if (slotStart < bE && slotEnd > bS) { gConflict = b; gTravelMs = tMs; break }
+          if (slotStart <= bE && slotEnd > bS) { gConflict = b; gTravelMs = tMs; break }
         }
         if (gConflict) { slotStart = roundUpToQuarter(new Date(gConflict.end.getTime() + gTravelMs)); continue }
 
@@ -280,7 +294,7 @@ export default async function handler(req, res) {
           const bufMs = dynamicTravel * 60000
           const bS = new Date(bStart.getTime() - bufMs)
           const bE = new Date(bEnd.getTime() + bufMs)
-          if (slotStart < bE && slotEnd > bS) { hasConflict = true; break }
+          if (slotStart <= bE && slotEnd > bS) { hasConflict = true; break }
         }
 
         if (hasConflict) { slotStart = new Date(slotStart.getTime() + incrementMs); continue }
