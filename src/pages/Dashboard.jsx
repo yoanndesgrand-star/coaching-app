@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import BookingCalendar from '../components/BookingCalendar'
 import { supabase } from '../lib/supabase'
 
 const GOLD = '#C4973A'
@@ -185,38 +186,21 @@ export default function Dashboard({ profile, setProfile }) {
           </div>
         </div>
 
-        {/* CRÉNEAUX DISPONIBLES */}
+        {/* CALENDRIER DE RÉSERVATION */}
         {hasPresentiel && profile.credits > 0 && (
           <div style={s.section}>
             <div style={s.sectionTitle}>Réserver une séance</div>
-            {loadingSlots ? (
-              <div style={{ color: 'var(--muted)', fontSize: 13 }}>Chargement des créneaux...</div>
-            ) : availableSlots.length === 0 ? (
-              <div style={{ color: 'var(--muted)', fontSize: 13, padding: '8px 0' }}>
-                Aucun créneau disponible pour le moment.
-                <a href={WHATSAPP + '?text=Bonjour%20Yoann%2C%20je%20voudrais%20réserver%20une%20séance.'} target="_blank" style={{ color: GOLD, marginLeft: 8 }}>
-                  Contacte Yoann →
-                </a>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {availableSlots.map(slot => (
-                  <div key={slot.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8 }}>
-                    <div>
-                      <div style={{ fontWeight: 500, fontSize: 14 }}>{formatDate(slot.start_time)}</div>
-                      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{formatTime(slot.start_time)} — ON AIR BNF Paris 13e</div>
-                    </div>
-                    <button
-                      onClick={() => bookSlot(slot.id)}
-                      disabled={bookingSlot === slot.id}
-                      style={s.btnGold}
-                    >
-                      {bookingSlot === slot.id ? '...' : 'Réserver'}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 20 }}>
+              Tu as {profile.credits} crédit{profile.credits > 1 ? 's' : ''} — sélectionne un jour disponible
+            </div>
+            <BookingCalendar
+              profile={profile}
+              onBooked={(creditsLeft) => {
+                setProfile(p => ({ ...p, credits: creditsLeft }))
+                setMsg({ type: 'success', text: 'Séance réservée ! Yoann te confirmera sous peu.' })
+                loadBookings()
+              }}
+            />
           </div>
         )}
 
