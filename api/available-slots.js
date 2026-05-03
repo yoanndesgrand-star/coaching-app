@@ -228,10 +228,9 @@ export default async function handler(req, res) {
         let gConflict = null
         let gTravelAfterMs = 0
         for (const b of googleBusy) {
-          // Trajet event → client (pour bloquer APRÈS l'événement)
-          const travelAfter = (clientAddress && b.location) ? (travelCache[`${b.location}|||${clientAddress}`] ?? 20) : 0
-          // Trajet client → event (pour bloquer AVANT l'événement)
-          const travelBefore = (clientAddress && b.location) ? (travelCache[`${clientAddress}|||${b.location}`] ?? 20) : 0
+          // Seulement bloquer si le trajet est connu (dans le cache)
+          const travelAfter = (clientAddress && b.location) ? (travelCache[`${b.location}|||${clientAddress}`] ?? 0) : 0
+          const travelBefore = (clientAddress && b.location) ? (travelCache[`${clientAddress}|||${b.location}`] ?? 0) : 0
           const bE = new Date(b.end.getTime() + travelAfter * 60000)
           const bS = new Date(b.start.getTime() - travelBefore * 60000)
           if (slotStart < bE && slotEnd > bS) { gConflict = b; gTravelAfterMs = travelAfter * 60000; break }
@@ -250,10 +249,8 @@ export default async function handler(req, res) {
           const bEnd = new Date(b.time_slots.end_time)
 
           const prevAddress = b.profiles?.coaching_type === 'domicile' ? b.profiles?.address : ONAIR_ADDRESS
-          // Trajet booking → client (après la réservation)
-          const travelAfter = (clientAddress && prevAddress && prevAddress !== clientAddress) ? (travelCache[`${prevAddress}|||${clientAddress}`] ?? 20) : 0
-          // Trajet client → booking (avant la réservation)
-          const travelBefore = (clientAddress && prevAddress && prevAddress !== clientAddress) ? (travelCache[`${clientAddress}|||${prevAddress}`] ?? 20) : 0
+          const travelAfter = (clientAddress && prevAddress && prevAddress !== clientAddress) ? (travelCache[`${prevAddress}|||${clientAddress}`] ?? 0) : 0
+          const travelBefore = (clientAddress && prevAddress && prevAddress !== clientAddress) ? (travelCache[`${clientAddress}|||${prevAddress}`] ?? 0) : 0
 
           const bS = new Date(bStart.getTime() - travelBefore * 60000)
           const bE = new Date(bEnd.getTime() + travelAfter * 60000)
@@ -307,7 +304,7 @@ export default async function handler(req, res) {
         }
 
         if (prevAddress && clientAddress && prevAddress !== clientAddress) {
-          travelMinutes = travelCache[`${prevAddress}|||${clientAddress}`] ?? 20
+          travelMinutes = travelCache[`${prevAddress}|||${clientAddress}`] ?? 0
         }
 
         // Calculer aussi le trajet VERS l'événement suivant (réservation OU Google Calendar)
@@ -343,7 +340,7 @@ export default async function handler(req, res) {
         // Si gap vers le prochain événement > 2h → le coach a le temps de rentrer, pas de trajet à compter
         const nextGapHours = nextStart ? (nextStart - slotEnd) / 3600000 : 999
         if (nextAddress && clientAddress && nextAddress !== clientAddress && nextGapHours <= 2) {
-          nextTravelMinutes = travelCache[`${clientAddress}|||${nextAddress}`] ?? 20
+          nextTravelMinutes = travelCache[`${clientAddress}|||${nextAddress}`] ?? 0
         }
 
         // La couleur = le PIRE des deux trajets (avant et après)
