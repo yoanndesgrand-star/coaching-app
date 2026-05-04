@@ -76,10 +76,20 @@ export default function Admin({ profile }) {
 
   async function deleteClient(id, name) {
     if (!window.confirm('Supprimer ' + name + ' définitivement ?')) return
-    await supabase.from('bookings').delete().eq('client_id', id)
-    await supabase.from('profiles').delete().eq('id', id)
-    setMsg({ type: 'success', text: name + ' supprimé.' })
-    loadAll()
+    try {
+      var res = await fetch('/api/admin-actions?action=delete-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: id })
+      })
+      var data = await res.json()
+      if (data.success) {
+        setMsg({ type: 'success', text: name + ' supprimé définitivement.' })
+        loadAll()
+      } else {
+        setMsg({ type: 'error', text: data.error || 'Erreur' })
+      }
+    } catch (e) { setMsg({ type: 'error', text: 'Erreur de connexion' }) }
   }
 
   async function cancelBooking(bookingId) {

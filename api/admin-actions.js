@@ -131,6 +131,32 @@ async function handleCreateClient(req, res) {
   return res.status(200).json({ success: true, userId: userId })
 }
 
+// ──── DELETE CLIENT ────
+async function handleDeleteClient(req, res) {
+  var { clientId } = req.body
+  if (!clientId) return res.status(400).json({ error: 'clientId requis' })
+
+  // Delete bookings and time slots
+  var { data: bookings } = await supabase.from('bookings').select('slot_id').eq('client_id', clientId)
+  if (bookings && bookings.length > 0) {
+    var slotIds = bookings.map(function(b) { return b.slot_id }).filter(Boolean)
+    await supabase.from('bookings').delete().eq('client_id', clientId)
+    if (slotIds.length > 0) {
+      await supabase.from('time_slots').delete().in('id', slotIds)
+    }
+  }
+
+  // Delete profile
+  await supabase.from('profiles').delete().eq('id', clientId)
+
+  // Delete auth user
+  try {
+    await supabase.auth.admin.deleteUser(clientId)
+  } catch (e) { console.log('Auth delete error:', e.message) }
+
+  return res.status(200).json({ success: true })
+}
+
 // ──── ROUTER ────
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
@@ -139,6 +165,7 @@ export default async function handler(req, res) {
     if (action === 'book') return handleBook(req, res)
     if (action === 'cancel') return handleCancel(req, res)
     if (action === 'create-client') return handleCreateClient(req, res)
+    if (action === 'delete-client') return handleDeleteClient(req, res)
     return res.status(400).json({ error: 'Action inconnue: ' + action })
   } catch (e) {
     console.error(e)
