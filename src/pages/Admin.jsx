@@ -30,6 +30,11 @@ export default function Admin({ profile }) {
   // Book for client
   var [bookForm, setBookForm] = useState({ clientId: '', date: '', time: '' })
   var [bookingClient, setBookingClient] = useState(false)
+  var [adminSlots, setAdminSlots] = useState([])
+  var [adminSlotsLoading, setAdminSlotsLoading] = useState(false)
+  var [adminMonth, setAdminMonth] = useState(new Date().getMonth() + 1)
+  var [adminYear, setAdminYear] = useState(new Date().getFullYear())
+  var [adminSelectedDate, setAdminSelectedDate] = useState(null)
   var [recurForm, setRecurForm] = useState({ clientId: '', dayOfWeek: '1', time: '09:00', duration: '3', startDate: '' })
   var [bookingRecur, setBookingRecur] = useState(false)
   var [showCreateClient, setShowCreateClient] = useState(false)
@@ -69,6 +74,21 @@ export default function Admin({ profile }) {
     await supabase.from('profiles').update({ credits: newCredits }).eq('id', creditForm.clientId)
     setMsg({ type: 'success', text: parseInt(creditForm.amount) + ' crédit(s) ajouté(s) à ' + (client.full_name || client.email) })
     setCreditForm({ clientId: '', amount: 1 })
+    loadAll()
+  }
+
+  async function addCreditsToClient(clientId, amount) {
+    var client = clients.find(function(c) { return c.id === clientId })
+    if (!client) return
+    var newCredits = (client.credits || 0) + parseInt(amount)
+    await supabase.from('profiles').update({ credits: newCredits }).eq('id', clientId)
+    setMsg({ type: 'success', text: amount + ' crédit(s) ajouté(s).' })
+    loadAll()
+  }
+
+  async function toggleNoCredit(clientId, current) {
+    await supabase.from('profiles').update({ no_credit_required: !current }).eq('id', clientId)
+    setMsg({ type: 'success', text: !current ? 'Réservation sans crédit activée.' : 'Crédit requis.' })
     loadAll()
   }
 
@@ -116,12 +136,11 @@ export default function Admin({ profile }) {
   }
 
   async function bookForClient() {
-    if (!bookForm.clientId || !bookForm.date || !bookForm.time) { setMsg({ type: 'error', text: 'Remplis tous les champs.' }); return }
+    if (!bookForm.clientId || !bookForm.startTime) { setMsg({ type: 'error', text: 'Sélectionne un client et un créneau.' }); return }
     setBookingClient(true)
-    var startTime = bookForm.date + 'T' + bookForm.time + ':00'
-    var duration = settings.session_duration || 60
-    var endDate = new Date(new Date(startTime).getTime() + duration * 60000)
-    var endTime = endDate.toISOString()
+    var slot = adminSlots.find(function(s) { return s.start === bookForm.startTime })
+    var startTime = bookForm.startTime
+    var endTime = slot ? slot.end : new Date(new Date(startTime).getTime() + (settings.session_duration || 60) * 60000).toISOString()
     try {
       var res = await fetch('/api/admin-actions?action=book', {
         method: 'POST',
@@ -131,13 +150,30 @@ export default function Admin({ profile }) {
       var data = await res.json()
       if (data.success) {
         setMsg({ type: 'success', text: 'Réservation créée, client notifié par email.' })
-        setBookForm({ clientId: '', date: '', time: '' })
+        setBookForm({ clientId: bookForm.clientId, startTime: '' })
+        loadAdminSlots(bookForm.clientId, adminYear, adminMonth)
         loadAll()
-      } else {
-        setMsg({ type: 'error', text: data.error || 'Erreur' })
-      }
+      } else { setMsg({ type: 'error', text: data.error || 'Erreur' }) }
     } catch (e) { setMsg({ type: 'error', text: 'Erreur de connexion' }) }
     setBookingClient(false)
+  }
+
+  async function loadAdminSlots(clientId, year, month) {
+    if (!clientId) { setAdminSlots([]); return }
+    setAdminSlotsLoading(true)
+    try {
+      var res = await fetch('/api/available-slots?year=' + year + '&month=' + month + '&clientId=' + clientId)
+      var data = await res.json()
+      setAdminSlots(data.slots || [])
+    } catch (e) { setAdminSlots([]) }
+    setAdminSlotsLoading(false)
+  }
+
+  function getSlotColor(slot) {
+    var travel = slot.travel_minutes || 0
+    if (travel <= 10) return { bg: 'rgba(74,222,128,0.15)', border: 'rgba(74,222,128,0.4)', text: '#4ade80' }
+    if (travel <= 25) return { bg: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.4)', text: '#fbbf24' }
+    return { bg: 'rgba(248,113,113,0.15)', border: 'rgba(248,113,113,0.4)', text: '#f87171' }
   }
 
   async function bookRecurring() {
@@ -288,6 +324,15 @@ export default function Admin({ profile }) {
           </div>
         </div>
         {subType && <div style={{ fontSize: 11, color: GOLD, marginBottom: 10 }}>⭐ {subType.label}</div>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+          <button onClick={function() { addCreditsToClient(c.id, 1) }} style={{ ...s.btnEdit, width: 28, height: 28, fontSize: 12 }}>+1</button>
+          <button onClick={function() { addCreditsToClient(c.id, 5) }} style={{ ...s.btnEdit, width: 28, height: 28, fontSize: 12 }}>+5</button>
+          <button onClick={function() { addCreditsToClient(c.id, 10) }} style={{ ...s.btnEdit, width: 32, height: 28, fontSize: 12 }}>+10</button>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto', cursor: 'pointer', fontSize: 11, color: c.no_credit_required ? '#4ade80' : 'var(--muted)' }}>
+            <input type="checkbox" checked={c.no_credit_required || false} onChange={function() { toggleNoCredit(c.id, c.no_credit_required) }} style={{ accentColor: GOLD }} />
+            Sans crédit
+          </label>
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <select value={c.subscription_type || ''} onChange={function(e) { updateSubscription(c.id, e.target.value) }} style={{ ...s.input, fontSize: 11, padding: '6px 8px', flex: 1 }}>
             <option value="">Abo: Aucun</option>
@@ -343,11 +388,6 @@ export default function Admin({ profile }) {
                 <div style={s.tileTitle}>Clients</div>
                 <div style={s.tileSub}>{clients.length} inscrits</div>
               </button>
-              <button onClick={function() { setView('credits') }} style={s.tile}>
-                <div style={s.tileIcon}>💰</div>
-                <div style={s.tileTitle}>Crédits</div>
-                <div style={s.tileSub}>Ajouter / gérer</div>
-              </button>
               <button onClick={function() { setView('settings') }} style={s.tile}>
                 <div style={s.tileIcon}>⚙️</div>
                 <div style={s.tileTitle}>Paramètres</div>
@@ -387,25 +427,69 @@ export default function Admin({ profile }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div>
                   <div style={s.fieldLabel}>Client</div>
-                  <select value={bookForm.clientId} onChange={function(e) { setBookForm(function(f) { return Object.assign({}, f, { clientId: e.target.value }) }) }} style={s.input}>
+                  <select value={bookForm.clientId} onChange={function(e) {
+                    var cid = e.target.value
+                    setBookForm({ clientId: cid, startTime: '' })
+                    setAdminSelectedDate(null)
+                    if (cid) loadAdminSlots(cid, adminYear, adminMonth)
+                    else setAdminSlots([])
+                  }} style={s.input}>
                     <option value="">Sélectionner un client</option>
-                    {clientsWithCredits.map(function(c) { return <option key={c.id} value={c.id}>{c.full_name || c.email} ({c.credits} crédits)</option> })}
+                    {clients.map(function(c) { return <option key={c.id} value={c.id}>{c.full_name || c.email} ({c.no_credit_required ? '∞' : (c.credits || 0)} crédits)</option> })}
                   </select>
-                  {clientsWithCredits.length === 0 && <div style={{ fontSize: 12, color: '#f87171', marginTop: 4 }}>Aucun client avec des crédits.</div>}
                 </div>
-                <div style={{ display: 'flex', gap: 12 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={s.fieldLabel}>Date</div>
-                    <input type="date" value={bookForm.date} onChange={function(e) { setBookForm(function(f) { return Object.assign({}, f, { date: e.target.value }) }) }} style={s.input} />
+
+                {bookForm.clientId && (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <button onClick={function() { var m = adminMonth - 1; var y = adminYear; if (m < 1) { m = 12; y-- } setAdminMonth(m); setAdminYear(y); loadAdminSlots(bookForm.clientId, y, m) }} style={s.btnNav}>←</button>
+                      <div style={{ fontWeight: 500 }}>{['','Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][adminMonth]} {adminYear}</div>
+                      <button onClick={function() { var m = adminMonth + 1; var y = adminYear; if (m > 12) { m = 1; y++ } setAdminMonth(m); setAdminYear(y); loadAdminSlots(bookForm.clientId, y, m) }} style={s.btnNav}>→</button>
+                    </div>
+
+                    {adminSlotsLoading ? (
+                      <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 20 }}>Chargement...</div>
+                    ) : (
+                      <div>
+                        {/* Days with slots */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                          {(function() {
+                            var days = []
+                            var seen = {}
+                            adminSlots.forEach(function(sl) { if (!seen[sl.date]) { seen[sl.date] = true; days.push(sl.date) } })
+                            return days.map(function(day) {
+                              var d = new Date(day + 'T12:00:00')
+                              var DAYS_SHORT = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam']
+                              var isSelected = adminSelectedDate === day
+                              return <button key={day} onClick={function() { setAdminSelectedDate(day) }} style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid', borderColor: isSelected ? GOLD : 'var(--border)', background: isSelected ? 'rgba(196,151,58,0.15)' : 'var(--surface)', color: 'var(--text)', cursor: 'pointer', fontFamily: 'Outfit, sans-serif', fontSize: 13 }}>{DAYS_SHORT[d.getDay()]} {d.getDate()}</button>
+                            })
+                          })()}
+                        </div>
+
+                        {/* Slots for selected day */}
+                        {adminSelectedDate && (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 8 }}>
+                            {adminSlots.filter(function(sl) { return sl.date === adminSelectedDate }).map(function(sl) {
+                              var color = getSlotColor(sl)
+                              var t = new Date(sl.start)
+                              var timeStr = t.getHours().toString().padStart(2,'0') + 'h' + t.getMinutes().toString().padStart(2,'0')
+                              var isSelected = bookForm.startTime === sl.start
+                              return <button key={sl.start} onClick={function() { setBookForm(function(f) { return Object.assign({}, f, { startTime: sl.start }) }) }} style={{ background: isSelected ? GOLD : color.bg, color: isSelected ? '#000' : color.text, border: '1px solid ' + (isSelected ? GOLD : color.border), borderRadius: 8, padding: '12px', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'Outfit, sans-serif' }}>{timeStr}</button>
+                            })}
+                          </div>
+                        )}
+
+                        {adminSlots.length === 0 && <div style={{ color: 'var(--muted)', fontSize: 13, textAlign: 'center' }}>Aucun créneau disponible ce mois.</div>}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={s.fieldLabel}>Heure</div>
-                    <input type="time" value={bookForm.time} onChange={function(e) { setBookForm(function(f) { return Object.assign({}, f, { time: e.target.value }) }) }} style={s.input} />
-                  </div>
-                </div>
-                <button onClick={bookForClient} disabled={bookingClient} style={s.btnGold}>
-                  {bookingClient ? 'Réservation en cours...' : 'Créer la réservation'}
-                </button>
+                )}
+
+                {bookForm.startTime && (
+                  <button onClick={bookForClient} disabled={bookingClient} style={s.btnGold}>
+                    {bookingClient ? 'Réservation en cours...' : 'Confirmer la réservation'}
+                  </button>
+                )}
               </div>
             </div>
 

@@ -13,9 +13,9 @@ export default async function handler(req, res) {
 
   // Vérifier crédits + infos coaching
   const { data: profile } = await supabase
-    .from('profiles').select('credits, full_name, email, coaching_type, address').eq('id', clientId).single()
+    .from('profiles').select('credits, full_name, email, coaching_type, address, no_credit_required').eq('id', clientId).single()
 
-  if (!profile || (profile.credits || 0) < 1)
+  if (!profile || (!profile.no_credit_required && (profile.credits || 0) < 1))
     return res.status(400).json({ error: 'Aucun crédit disponible' })
 
   // Créer le time_slot
@@ -26,7 +26,8 @@ export default async function handler(req, res) {
   }).select().single()
 
   // Déduire crédit + créer réservation
-  await supabase.from('profiles').update({ credits: profile.credits - 1 }).eq('id', clientId)
+  const newCredits = profile.no_credit_required ? (profile.credits || 0) : (profile.credits || 0) - 1
+  await supabase.from('profiles').update({ credits: newCredits }).eq('id', clientId)
   const { data: booking } = await supabase.from('bookings').insert({
     client_id: clientId,
     slot_id: slot.id,
@@ -103,7 +104,7 @@ export default async function handler(req, res) {
               <div style="margin-bottom: 4px;">🕐 ${timeStr}</div>
               <div>${locationStr}</div>
             </div>
-            <div style="font-size: 13px; color: #888;">Crédits restants du client : ${profile.credits - 1}</div>
+            <div style="font-size: 13px; color: #888;">Crédits restants du client : ${newCredits}</div>
           </div>
         `
       })
@@ -112,5 +113,5 @@ export default async function handler(req, res) {
     console.error('Admin notification:', e.message)
   }
 
-  return res.status(200).json({ success: true, booking, creditsLeft: profile.credits - 1 })
+  return res.status(200).json({ success: true, booking, creditsLeft: newCredits })
 }

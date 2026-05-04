@@ -43,13 +43,14 @@ async function handleBook(req, res) {
   var { clientId, startTime, endTime } = req.body
   if (!clientId || !startTime || !endTime) return res.status(400).json({ error: 'Paramètres manquants' })
 
-  var { data: profile } = await supabase.from('profiles').select('credits, full_name, email, coaching_type, address').eq('id', clientId).single()
+  var { data: profile } = await supabase.from('profiles').select('credits, full_name, email, coaching_type, address, no_credit_required').eq('id', clientId).single()
   if (!profile) return res.status(404).json({ error: 'Client introuvable' })
-  if ((profile.credits || 0) < 1) return res.status(400).json({ error: 'Ce client n\'a pas de crédits' })
+  if (!profile.no_credit_required && (profile.credits || 0) < 1) return res.status(400).json({ error: 'Ce client n\'a pas de crédits' })
 
   var { data: slot } = await supabase.from('time_slots').insert({ start_time: startTime, end_time: endTime, is_available: false, date: startTime.split('T')[0] }).select().single()
   var { data: booking } = await supabase.from('bookings').insert({ client_id: clientId, slot_id: slot.id, status: 'confirmed' }).select().single()
-  await supabase.from('profiles').update({ credits: profile.credits - 1 }).eq('id', clientId)
+  await supabase.from('profiles').update({ credits: profile.no_credit_required ? (profile.credits || 0) : (profile.credits || 0) - 1 }).eq('id', clientId)
+  var creditsLeft = profile.no_credit_required ? (profile.credits || 0) : (profile.credits || 0) - 1
 
   var eventLocation = profile.coaching_type === 'domicile' ? (profile.address || 'Domicile client') : 'ON AIR BNF, 93 avenue de France, 75013 Paris'
   try {
@@ -68,7 +69,7 @@ async function handleBook(req, res) {
   var locStr = profile.coaching_type === 'domicile' ? '🏠 ' + (profile.address || 'À domicile') : '🏋️ ON AIR BNF'
 
   await sendEmail(profile.email, '✅ Séance confirmée — ' + dateStr + ' à ' + timeStr,
-    '<div style="font-family:Arial;max-width:500px;margin:0 auto;background:#080808;color:#f0ece4;border-radius:12px;overflow:hidden"><div style="background:#161410;padding:32px 28px;text-align:center;border-bottom:1px solid #2a2520"><div style="font-family:Georgia;font-size:22px">Yoann <span style="color:#C4973A">Desgrand</span></div></div><div style="padding:32px 28px"><div style="font-size:18px;margin-bottom:24px">Séance confirmée ✅</div><div style="background:#141210;border:1px solid #2a2520;border-radius:10px;padding:20px;margin-bottom:20px"><div style="font-size:16px;margin-bottom:6px">📅 ' + dateStr + '</div><div style="color:#7a7065;margin-bottom:6px">🕐 ' + timeStr + '</div><div style="color:#7a7065">' + locStr + '</div></div><div style="background:rgba(196,151,58,0.08);border:1px solid rgba(196,151,58,0.2);border-radius:8px;padding:14px;margin-bottom:20px;color:#C4973A;font-size:13px">💳 Crédits restants : ' + (profile.credits - 1) + '</div></div></div>')
+    '<div style="font-family:Arial;max-width:500px;margin:0 auto;background:#080808;color:#f0ece4;border-radius:12px;overflow:hidden"><div style="background:#161410;padding:32px 28px;text-align:center;border-bottom:1px solid #2a2520"><div style="font-family:Georgia;font-size:22px">Yoann <span style="color:#C4973A">Desgrand</span></div></div><div style="padding:32px 28px"><div style="font-size:18px;margin-bottom:24px">Séance confirmée ✅</div><div style="background:#141210;border:1px solid #2a2520;border-radius:10px;padding:20px;margin-bottom:20px"><div style="font-size:16px;margin-bottom:6px">📅 ' + dateStr + '</div><div style="color:#7a7065;margin-bottom:6px">🕐 ' + timeStr + '</div><div style="color:#7a7065">' + locStr + '</div></div><div style="background:rgba(196,151,58,0.08);border:1px solid rgba(196,151,58,0.2);border-radius:8px;padding:14px;margin-bottom:20px;color:#C4973A;font-size:13px">💳 Crédits restants : ' + creditsLeft + '</div></div></div>')
 
   await sendEmail(process.env.ADMIN_EMAIL || 'yoann.desgrand@gmail.com', '📅 Réservation — ' + (profile.full_name || profile.email),
     '<div style="font-family:Arial;padding:24px"><h2>Réservation 🎯</h2><div style="background:#f5f5f5;border-radius:10px;padding:18px"><b>' + (profile.full_name || profile.email) + '</b><br>📅 ' + dateStr + '<br>🕐 ' + timeStr + '<br>' + locStr + '</div></div>')
@@ -100,6 +101,9 @@ async function handleCancel(req, res) {
     var d = new Date(booking.time_slots.start_time)
     await sendEmail(booking.profiles.email, '❌ Séance annulée — ' + fmtDate(d),
       '<div style="font-family:Arial;max-width:500px;margin:0 auto;background:#080808;color:#f0ece4;border-radius:12px;overflow:hidden"><div style="background:#161410;padding:32px 28px;text-align:center;border-bottom:1px solid #2a2520"><div style="font-family:Georgia;font-size:22px">Yoann <span style="color:#C4973A">Desgrand</span></div></div><div style="padding:32px 28px"><div style="font-size:18px;margin-bottom:24px">Séance annulée ❌</div><div style="background:#141210;border:1px solid #2a2520;border-radius:10px;padding:20px;margin-bottom:20px"><div>📅 ' + fmtDate(d) + '</div><div style="color:#7a7065">🕐 ' + fmtTime(d) + '</div></div><div style="background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);border-radius:8px;padding:14px;color:#4ade80;font-size:13px">💳 Ton crédit a été restitué.</div></div></div>')
+
+    await sendEmail(process.env.ADMIN_EMAIL || 'yoann.desgrand@gmail.com', '❌ Annulation — ' + (booking.profiles.full_name || booking.profiles.email),
+      '<div style="font-family:Arial;padding:24px"><h2>Séance annulée ❌</h2><div style="background:#f5f5f5;border-radius:10px;padding:18px"><b>' + (booking.profiles.full_name || booking.profiles.email) + '</b><br>📅 ' + fmtDate(d) + '<br>🕐 ' + fmtTime(d) + '<br>💳 Crédit restitué</div></div>')
   }
 
   return res.status(200).json({ success: true })

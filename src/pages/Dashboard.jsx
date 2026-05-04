@@ -65,12 +65,21 @@ export default function Dashboard({ profile, setProfile }) {
     var hoursUntil = (new Date(booking.time_slots.start_time) - new Date()) / 3600000
     if (hoursUntil < 24) { setMsg({ type: 'error', text: 'Annulation impossible moins de 24h avant la séance.' }); return }
     setCancelling(booking.id)
-    await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', booking.id)
-    await supabase.from('time_slots').update({ is_available: true }).eq('id', booking.slot_id)
-    var { data: p } = await supabase.from('profiles').update({ credits: profile.credits + 1 }).eq('id', profile.id).select().single()
-    setProfile(p)
-    setMsg({ type: 'success', text: 'Séance annulée, crédit restitué.' })
-    loadBookings()
+    try {
+      var res = await fetch('/api/admin-actions?action=cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: booking.id })
+      })
+      var data = await res.json()
+      if (data.success) {
+        setProfile(function(p) { return Object.assign({}, p, { credits: (p.credits || 0) + 1 }) })
+        setMsg({ type: 'success', text: 'Séance annulée, crédit restitué.' })
+        loadBookings()
+      } else {
+        setMsg({ type: 'error', text: data.error || 'Erreur' })
+      }
+    } catch (e) { setMsg({ type: 'error', text: 'Erreur de connexion' }) }
     setCancelling(null)
   }
 
@@ -208,7 +217,7 @@ export default function Dashboard({ profile, setProfile }) {
               <div style={s.viewTitle}>Réserver une séance</div>
               <div style={{ fontSize: 13, color: 'var(--muted)' }}>{profile.credits || 0} crédit{(profile.credits || 0) > 1 ? 's' : ''} disponible{(profile.credits || 0) > 1 ? 's' : ''}</div>
             </div>
-            {(profile.credits || 0) > 0 ? (
+            {(profile.credits || 0) > 0 || profile.no_credit_required ? (
               <BookingCalendar profile={profile} onBooked={function(creditsLeft) { setProfile(function(p) { return Object.assign({}, p, { credits: creditsLeft }) }); loadBookings() }} />
             ) : (
               <div style={s.emptyCard}>
