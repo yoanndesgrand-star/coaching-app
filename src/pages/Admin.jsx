@@ -25,6 +25,8 @@ export default function Admin({ profile }) {
   var [newBlock, setNewBlock] = useState({ date: '', start_time: '', end_time: '', reason: '' })
   var [savingHours, setSavingHours] = useState(false)
   var [cancelling, setCancelling] = useState(null)
+  var [reminderDelay, setReminderDelay] = useState(settings.reminder_hours || 12)
+  var [bufferMode, setBufferMode] = useState(settings.buffer_mode || 'travel')
   // Book for client
   var [bookForm, setBookForm] = useState({ clientId: '', date: '', time: '' })
   var [bookingClient, setBookingClient] = useState(false)
@@ -37,7 +39,7 @@ export default function Admin({ profile }) {
   var [editClientData, setEditClientData] = useState({})
   var [savingClient, setSavingClient] = useState(false)
 
-  useEffect(function() { loadAll() }, [])
+  useEffect(function() { loadAll(); fetch('/api/send-reminders').catch(function(){}) }, [])
 
   async function loadAll() {
     setLoading(true)
@@ -175,8 +177,8 @@ export default function Admin({ profile }) {
         return { day_of_week: h.day_of_week, start_time: h.start_time, end_time: h.end_time, is_active: true }
       }))
     }
-    await supabase.from('coaching_settings').upsert({ id: 'admin', session_duration: settings.session_duration, buffer_time: settings.buffer_time, updated_at: new Date().toISOString() })
-    setMsg({ type: 'success', text: 'Horaires sauvegardés !' })
+    await supabase.from('coaching_settings').upsert({ id: 'admin', session_duration: settings.session_duration, buffer_time: settings.buffer_time, buffer_mode: bufferMode, reminder_hours: reminderDelay, updated_at: new Date().toISOString() })
+    setMsg({ type: 'success', text: 'Paramètres sauvegardés !' })
     setSavingHours(false)
   }
 
@@ -346,15 +348,10 @@ export default function Admin({ profile }) {
                 <div style={s.tileTitle}>Crédits</div>
                 <div style={s.tileSub}>Ajouter / gérer</div>
               </button>
-              <button onClick={function() { setView('horaires') }} style={s.tile}>
-                <div style={s.tileIcon}>🕐</div>
-                <div style={s.tileTitle}>Horaires</div>
-                <div style={s.tileSub}>Jours & heures</div>
-              </button>
-              <button onClick={function() { setView('exceptions') }} style={s.tile}>
-                <div style={s.tileIcon}>🚫</div>
-                <div style={s.tileTitle}>Exceptions</div>
-                <div style={s.tileSub}>{blockedPeriods.length} bloquée{blockedPeriods.length > 1 ? 's' : ''}</div>
+              <button onClick={function() { setView('settings') }} style={s.tile}>
+                <div style={s.tileIcon}>⚙️</div>
+                <div style={s.tileTitle}>Paramètres</div>
+                <div style={s.tileSub}>Horaires, tampons, rappels</div>
               </button>
             </div>
 
@@ -611,20 +608,77 @@ export default function Admin({ profile }) {
         )}
 
         {/* HORAIRES */}
-        {view === 'horaires' && (
+        {view === 'settings' && (
           <div style={{ animation: 'fadeIn 0.3s ease' }}>
-            <div style={s.viewHeader}><div style={s.viewTitle}>Horaires</div></div>
+            <div style={s.viewHeader}><div style={s.viewTitle}>Paramètres</div></div>
+
+            {/* SÉANCES */}
             <div style={s.card}>
-              <div style={s.cardTitle}>Durée d'une séance</div>
-              <select value={settings.session_duration} onChange={function(e) { setSettings(function(st) { return Object.assign({}, st, { session_duration: parseInt(e.target.value) }) }) }} style={{ ...s.input, width: 160 }}>
-                <option value={45}>45 minutes</option>
-                <option value={60}>1 heure</option>
-                <option value={90}>1h30</option>
-                <option value={120}>2 heures</option>
-              </select>
+              <div style={s.cardTitle}>🏋️ Séances</div>
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div>
+                  <div style={s.fieldLabel}>Durée d'une séance</div>
+                  <select value={settings.session_duration} onChange={function(e) { setSettings(function(st) { return Object.assign({}, st, { session_duration: parseInt(e.target.value) }) }) }} style={{ ...s.input, width: 160 }}>
+                    <option value={45}>45 minutes</option>
+                    <option value={60}>1 heure</option>
+                    <option value={90}>1h30</option>
+                    <option value={120}>2 heures</option>
+                  </select>
+                </div>
+              </div>
             </div>
+
+            {/* TAMPONS */}
             <div style={s.card}>
-              <div style={s.cardTitle}>Jours et heures d'ouverture</div>
+              <div style={s.cardTitle}>🚗 Tampons entre séances</div>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                <button onClick={function() { setBufferMode('travel') }} style={{ flex: 1, padding: '14px', borderRadius: 8, border: '1px solid var(--border)', background: bufferMode === 'travel' ? 'rgba(196,151,58,0.15)' : 'var(--surface)', borderColor: bufferMode === 'travel' ? 'rgba(196,151,58,0.4)' : 'var(--border)', cursor: 'pointer', color: 'var(--text)', fontFamily: 'Outfit, sans-serif', fontSize: 13 }}>🗺️ Calcul automatique du trajet</button>
+                <button onClick={function() { setBufferMode('fixed') }} style={{ flex: 1, padding: '14px', borderRadius: 8, border: '1px solid var(--border)', background: bufferMode === 'fixed' ? 'rgba(196,151,58,0.15)' : 'var(--surface)', borderColor: bufferMode === 'fixed' ? 'rgba(196,151,58,0.4)' : 'var(--border)', cursor: 'pointer', color: 'var(--text)', fontFamily: 'Outfit, sans-serif', fontSize: 13 }}>⏱️ Tampon fixe</button>
+              </div>
+              {bufferMode === 'fixed' && (
+                <div>
+                  <div style={s.fieldLabel}>Tampon fixe (minutes)</div>
+                  <select value={settings.buffer_time || 15} onChange={function(e) { setSettings(function(st) { return Object.assign({}, st, { buffer_time: parseInt(e.target.value) }) }) }} style={{ ...s.input, width: 160 }}>
+                    <option value={0}>Aucun</option>
+                    <option value={10}>10 min</option>
+                    <option value={15}>15 min</option>
+                    <option value={20}>20 min</option>
+                    <option value={30}>30 min</option>
+                    <option value={45}>45 min</option>
+                    <option value={60}>1 heure</option>
+                  </select>
+                </div>
+              )}
+              {bufferMode === 'travel' && (
+                <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
+                  Le temps entre chaque séance est calculé automatiquement via Google Maps selon l'adresse du client précédent et du client suivant. Les créneaux sont arrondis au quart d'heure supérieur.
+                </div>
+              )}
+            </div>
+
+            {/* RAPPELS */}
+            <div style={s.card}>
+              <div style={s.cardTitle}>🔔 Rappels automatiques</div>
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div>
+                  <div style={s.fieldLabel}>Rappel par email</div>
+                  <select value={reminderDelay} onChange={function(e) { setReminderDelay(parseInt(e.target.value)) }} style={{ ...s.input, width: 200 }}>
+                    <option value={0}>Désactivé</option>
+                    <option value={6}>6h avant</option>
+                    <option value={12}>12h avant</option>
+                    <option value={24}>24h avant</option>
+                    <option value={48}>48h avant</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>
+                Un email de rappel sera envoyé automatiquement aux clients avant chaque séance.
+              </div>
+            </div>
+
+            {/* HORAIRES */}
+            <div style={s.card}>
+              <div style={s.cardTitle}>🕐 Jours et heures d'ouverture</div>
               {openingHours.map(function(h, i) {
                 return (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 16px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 8, opacity: h.is_active ? 1 : 0.5 }}>
@@ -643,28 +697,19 @@ export default function Admin({ profile }) {
                   </div>
                 )
               })}
-              <button onClick={saveHours} disabled={savingHours} style={{ ...s.btnGold, marginTop: 16 }}>{savingHours ? 'Sauvegarde...' : 'Sauvegarder'}</button>
             </div>
-          </div>
-        )}
 
-        {/* EXCEPTIONS */}
-        {view === 'exceptions' && (
-          <div style={{ animation: 'fadeIn 0.3s ease' }}>
-            <div style={s.viewHeader}><div style={s.viewTitle}>Exceptions</div></div>
+            {/* EXCEPTIONS */}
             <div style={s.card}>
-              <div style={s.cardTitle}>Bloquer une période</div>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <div style={s.cardTitle}>🚫 Périodes bloquées</div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
                 <div><div style={s.fieldLabel}>Date</div><input type="date" value={newBlock.date} onChange={function(e) { setNewBlock(function(b) { return Object.assign({}, b, { date: e.target.value }) }) }} style={s.input} /></div>
                 <div><div style={s.fieldLabel}>Début</div><input type="time" value={newBlock.start_time} onChange={function(e) { setNewBlock(function(b) { return Object.assign({}, b, { start_time: e.target.value }) }) }} style={{ ...s.input, width: 110 }} /></div>
                 <div><div style={s.fieldLabel}>Fin</div><input type="time" value={newBlock.end_time} onChange={function(e) { setNewBlock(function(b) { return Object.assign({}, b, { end_time: e.target.value }) }) }} style={{ ...s.input, width: 110 }} /></div>
                 <div style={{ flex: 2 }}><div style={s.fieldLabel}>Raison</div><input type="text" value={newBlock.reason} onChange={function(e) { setNewBlock(function(b) { return Object.assign({}, b, { reason: e.target.value }) }) }} style={s.input} placeholder="Congés, formation..." /></div>
                 <button onClick={addBlock} style={{ ...s.btnGold, alignSelf: 'flex-end' }}>Bloquer</button>
               </div>
-            </div>
-            <div style={s.card}>
-              <div style={s.cardTitle}>Périodes bloquées</div>
-              {blockedPeriods.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13 }}>Aucune.</div> : blockedPeriods.map(function(bp) {
+              {blockedPeriods.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13 }}>Aucune période bloquée.</div> : blockedPeriods.map(function(bp) {
                 return (
                   <div key={bp.id} style={s.bookingRow}>
                     <div>
@@ -676,6 +721,8 @@ export default function Admin({ profile }) {
                 )
               })}
             </div>
+
+            <button onClick={saveHours} disabled={savingHours} style={{ ...s.btnGold, width: '100%', marginTop: 8 }}>{savingHours ? 'Sauvegarde...' : 'Sauvegarder tous les paramètres'}</button>
           </div>
         )}
       </div>
