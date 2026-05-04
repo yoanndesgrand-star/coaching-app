@@ -131,6 +131,86 @@ async function handleCreateClient(req, res) {
   return res.status(200).json({ success: true, userId: userId })
 }
 
+// ──── BOOK RECURRING ────
+async function handleBookRecurring(req, res) {
+  var { clientId, dayOfWeek, time, durationMonths, startDate, sessionDuration } = req.body
+  if (!clientId || dayOfWeek === undefined || !time || !durationMonths || !startDate) {
+    return res.status(400).json({ error: 'Paramètres manquants' })
+  }
+
+  var { data: profile } = await supabase.from('profiles').select('credits, full_name, email, coaching_type, address').eq('id', clientId).single()
+  if (!profile) return res.status(404).json({ error: 'Client introuvable' })
+
+  // Calculate all dates
+  var dates = []
+  var start = new Date(startDate + 'T00:00:00')
+  var endDate = new Date(start)
+  endDate.setMonth(endDate.getMonth() + parseInt(durationMonths))
+
+  var d = new Date(start)
+  // Find first occurrence of the day
+  while (d.getDay() !== parseInt(dayOfWeek)) d.setDate(d.getDate() + 1)
+
+  while (d < endDate) {
+    dates.push(new Date(d))
+    d.setDate(d.getDate() + 7)
+  }
+
+  if (dates.length === 0) return res.status(400).json({ error: 'Aucune date trouvée' })
+  if ((profile.credits || 0) < dates.length) {
+    return res.status(400).json({ error: 'Pas assez de crédits. ' + dates.length + ' nécessaires, ' + (profile.credits || 0) + ' disponibles.' })
+  }
+
+  var dur = parseInt(sessionDuration) || 60
+  var calendar = null
+  try { calendar = await getCalendar() } catch (e) {}
+
+  var eventLocation = profile.coaching_type === 'domicile' ? (profile.address || 'Domicile client') : 'ON AIR BNF, 93 avenue de France, 75013 Paris'
+  var created = 0
+
+  for (var i = 0; i < dates.length; i++) {
+    var dateObj = dates[i]
+    var dateStr = dateObj.toISOString().split('T')[0]
+    var startTime = dateStr + 'T' + time + ':00'
+    var endTime = new Date(new Date(startTime).getTime() + dur * 60000).toISOString()
+
+    var { data: slot } = await supabase.from('time_slots').insert({ start_time: startTime, end_time: endTime, is_available: false, date: dateStr }).select().single()
+    if (!slot) continue
+
+    var { data: booking } = await supabase.from('bookings').insert({ client_id: clientId, slot_id: slot.id, status: 'confirmed' }).select().single()
+
+    // Google Calendar
+    if (calendar && booking) {
+      try {
+        var gcalEvent = await calendar.events.insert({
+          calendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
+          requestBody: { summary: 'YD Coaching - ' + (profile.full_name || profile.email), location: eventLocation, start: { dateTime: startTime }, end: { dateTime: endTime }, description: (profile.coaching_type === 'domicile' ? '🏠 Domicile' : '🏋️ Salle') + '\n' + profile.email + '\n(Récurrent)' }
+        })
+        if (gcalEvent?.data?.id) await supabase.from('bookings').update({ google_event_id: gcalEvent.data.id }).eq('id', booking.id)
+      } catch (e) { console.log('GCal recurring:', e.message) }
+    }
+    created++
+  }
+
+  // Deduct all credits at once
+  await supabase.from('profiles').update({ credits: (profile.credits || 0) - created }).eq('id', clientId)
+
+  // Send summary email to client
+  var DAYS_FR = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi']
+  var dayName = DAYS_FR[parseInt(dayOfWeek)]
+  var firstDate = fmtDate(dates[0])
+  var lastDate = fmtDate(dates[dates.length - 1])
+
+  await sendEmail(profile.email, '📅 ' + created + ' séances récurrentes confirmées',
+    '<div style="font-family:Arial;max-width:500px;margin:0 auto;background:#080808;color:#f0ece4;border-radius:12px;overflow:hidden"><div style="background:#161410;padding:32px 28px;text-align:center;border-bottom:1px solid #2a2520"><div style="font-family:Georgia;font-size:22px">Yoann <span style="color:#C4973A">Desgrand</span></div></div><div style="padding:32px 28px"><div style="font-size:18px;margin-bottom:24px">Séances récurrentes confirmées ✅</div><div style="background:#141210;border:1px solid #2a2520;border-radius:10px;padding:20px;margin-bottom:20px"><div style="font-size:16px;margin-bottom:8px">📅 Tous les ' + dayName + 's à ' + time + '</div><div style="color:#7a7065;margin-bottom:6px">Du ' + firstDate + ' au ' + lastDate + '</div><div style="color:#7a7065">' + created + ' séances au total</div></div><div style="background:rgba(196,151,58,0.08);border:1px solid rgba(196,151,58,0.2);border-radius:8px;padding:14px;color:#C4973A;font-size:13px">💳 Crédits restants : ' + ((profile.credits || 0) - created) + '</div></div></div>')
+
+  // Notify admin
+  await sendEmail(process.env.ADMIN_EMAIL || 'yoann.desgrand@gmail.com', '📅 Récurrence — ' + (profile.full_name || profile.email),
+    '<div style="font-family:Arial;padding:24px"><h2>Récurrence créée 🎯</h2><div style="background:#f5f5f5;border-radius:10px;padding:18px"><b>' + (profile.full_name || profile.email) + '</b><br>📅 Tous les ' + dayName + 's à ' + time + '<br>📊 ' + created + ' séances (' + durationMonths + ' mois)<br>💳 Crédits restants : ' + ((profile.credits || 0) - created) + '</div></div>')
+
+  return res.status(200).json({ success: true, count: created })
+}
+
 // ──── DELETE CLIENT ────
 async function handleDeleteClient(req, res) {
   var { clientId } = req.body
@@ -163,6 +243,7 @@ export default async function handler(req, res) {
   try {
     var action = req.query.action || req.body.action
     if (action === 'book') return handleBook(req, res)
+    if (action === 'book-recurring') return handleBookRecurring(req, res)
     if (action === 'cancel') return handleCancel(req, res)
     if (action === 'create-client') return handleCreateClient(req, res)
     if (action === 'delete-client') return handleDeleteClient(req, res)

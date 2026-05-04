@@ -28,6 +28,8 @@ export default function Admin({ profile }) {
   // Book for client
   var [bookForm, setBookForm] = useState({ clientId: '', date: '', time: '' })
   var [bookingClient, setBookingClient] = useState(false)
+  var [recurForm, setRecurForm] = useState({ clientId: '', dayOfWeek: '1', time: '09:00', duration: '3', startDate: '' })
+  var [bookingRecur, setBookingRecur] = useState(false)
   var [showCreateClient, setShowCreateClient] = useState(false)
   var [newClient, setNewClient] = useState({ email: '', fullName: '', phone: '', coachingType: 'presentiel', address: '' })
   var [creatingClient, setCreatingClient] = useState(false)
@@ -134,6 +136,34 @@ export default function Admin({ profile }) {
       }
     } catch (e) { setMsg({ type: 'error', text: 'Erreur de connexion' }) }
     setBookingClient(false)
+  }
+
+  async function bookRecurring() {
+    if (!recurForm.clientId || !recurForm.time || !recurForm.startDate) { setMsg({ type: 'error', text: 'Remplis tous les champs.' }); return }
+    setBookingRecur(true)
+    try {
+      var res = await fetch('/api/admin-actions?action=book-recurring', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: recurForm.clientId,
+          dayOfWeek: parseInt(recurForm.dayOfWeek),
+          time: recurForm.time,
+          durationMonths: parseInt(recurForm.duration),
+          startDate: recurForm.startDate,
+          sessionDuration: settings.session_duration || 60
+        })
+      })
+      var data = await res.json()
+      if (data.success) {
+        setMsg({ type: 'success', text: data.count + ' séances créées sur ' + recurForm.duration + ' mois. Crédits déduits.' })
+        setRecurForm({ clientId: '', dayOfWeek: '1', time: '09:00', duration: '3', startDate: '' })
+        loadAll()
+      } else {
+        setMsg({ type: 'error', text: data.error || 'Erreur' })
+      }
+    } catch (e) { setMsg({ type: 'error', text: 'Erreur de connexion' }) }
+    setBookingRecur(false)
   }
 
   async function saveHours() {
@@ -378,6 +408,70 @@ export default function Admin({ profile }) {
                 </div>
                 <button onClick={bookForClient} disabled={bookingClient} style={s.btnGold}>
                   {bookingClient ? 'Réservation en cours...' : 'Créer la réservation'}
+                </button>
+              </div>
+            </div>
+
+            {/* RÉCURRENCE */}
+            <div style={{ ...s.card, borderColor: 'rgba(196,151,58,0.3)' }}>
+              <div style={s.cardTitle}>📅 Réservation récurrente</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div>
+                  <div style={s.fieldLabel}>Client</div>
+                  <select value={recurForm.clientId} onChange={function(e) { setRecurForm(function(f) { return Object.assign({}, f, { clientId: e.target.value }) }) }} style={s.input}>
+                    <option value="">Sélectionner un client</option>
+                    {clients.map(function(c) { return <option key={c.id} value={c.id}>{c.full_name || c.email} ({c.credits || 0} crédits)</option> })}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={s.fieldLabel}>Jour</div>
+                    <select value={recurForm.dayOfWeek} onChange={function(e) { setRecurForm(function(f) { return Object.assign({}, f, { dayOfWeek: e.target.value }) }) }} style={s.input}>
+                      <option value="1">Lundi</option>
+                      <option value="2">Mardi</option>
+                      <option value="3">Mercredi</option>
+                      <option value="4">Jeudi</option>
+                      <option value="5">Vendredi</option>
+                      <option value="6">Samedi</option>
+                      <option value="0">Dimanche</option>
+                    </select>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={s.fieldLabel}>Heure</div>
+                    <input type="time" value={recurForm.time} onChange={function(e) { setRecurForm(function(f) { return Object.assign({}, f, { time: e.target.value }) }) }} style={s.input} />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={s.fieldLabel}>À partir du</div>
+                    <input type="date" value={recurForm.startDate} onChange={function(e) { setRecurForm(function(f) { return Object.assign({}, f, { startDate: e.target.value }) }) }} style={s.input} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={s.fieldLabel}>Durée</div>
+                    <select value={recurForm.duration} onChange={function(e) { setRecurForm(function(f) { return Object.assign({}, f, { duration: e.target.value }) }) }} style={s.input}>
+                      <option value="1">1 mois</option>
+                      <option value="3">3 mois</option>
+                      <option value="6">6 mois</option>
+                      <option value="12">12 mois</option>
+                    </select>
+                  </div>
+                </div>
+                {recurForm.clientId && (function() {
+                  var client = clients.find(function(c) { return c.id === recurForm.clientId })
+                  var weeks = parseInt(recurForm.duration) * 4
+                  var credits = client ? (client.credits || 0) : 0
+                  var enough = credits >= weeks
+                  return (
+                    <div style={{ fontSize: 12, color: enough ? '#4ade80' : '#f87171', background: enough ? 'rgba(74,222,128,0.06)' : 'rgba(248,113,113,0.06)', border: '1px solid', borderColor: enough ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)', padding: '10px 14px', borderRadius: 8 }}>
+                      {enough
+                        ? '✅ ' + weeks + ' séances seront créées. Le client a ' + credits + ' crédits → il en restera ' + (credits - weeks) + '.'
+                        : '⚠️ ' + weeks + ' séances nécessaires mais le client n\'a que ' + credits + ' crédits. Ajoute des crédits d\'abord ou réduis la durée.'
+                      }
+                    </div>
+                  )
+                })()}
+                <button onClick={bookRecurring} disabled={bookingRecur} style={s.btnGold}>
+                  {bookingRecur ? 'Création en cours...' : 'Créer les séances récurrentes'}
                 </button>
               </div>
             </div>
