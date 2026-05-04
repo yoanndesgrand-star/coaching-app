@@ -28,6 +28,9 @@ export default function Admin({ profile }) {
   // Book for client
   var [bookForm, setBookForm] = useState({ clientId: '', date: '', time: '' })
   var [bookingClient, setBookingClient] = useState(false)
+  var [showCreateClient, setShowCreateClient] = useState(false)
+  var [newClient, setNewClient] = useState({ email: '', fullName: '', phone: '', coachingType: 'presentiel', address: '' })
+  var [creatingClient, setCreatingClient] = useState(false)
 
   useEffect(function() { loadAll() }, [])
 
@@ -145,6 +148,67 @@ export default function Admin({ profile }) {
   var confirmedBookings = bookings.filter(function(b) { return b.status === 'confirmed' && b.time_slots })
   var upcomingBookings = confirmedBookings.filter(function(b) { return new Date(b.time_slots.start_time) > new Date() }).sort(function(a, b) { return new Date(a.time_slots.start_time) - new Date(b.time_slots.start_time) })
   var clientsWithCredits = clients.filter(function(c) { return (c.credits || 0) > 0 })
+
+  async function createClient() {
+    if (!newClient.email || !newClient.fullName || !newClient.coachingType) { setMsg({ type: 'error', text: 'Email, nom et type requis.' }); return }
+    setCreatingClient(true)
+    try {
+      var res = await fetch('/api/admin-create-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newClient)
+      })
+      var data = await res.json()
+      if (data.success) {
+        setMsg({ type: 'success', text: newClient.fullName + ' créé ! Email envoyé avec le mot de passe.' })
+        setNewClient({ email: '', fullName: '', phone: '', coachingType: 'presentiel', address: '' })
+        setShowCreateClient(false)
+        loadAll()
+      } else {
+        setMsg({ type: 'error', text: data.error || 'Erreur' })
+      }
+    } catch (e) { setMsg({ type: 'error', text: 'Erreur de connexion' }) }
+    setCreatingClient(false)
+  }
+
+  function formatPhone(phone) {
+    if (!phone) return null
+    var clean = phone.replace(/\D/g, '')
+    if (clean.startsWith('0')) clean = '33' + clean.slice(1)
+    if (!clean.startsWith('33')) clean = '33' + clean
+    return clean
+  }
+
+  function renderClientCard(c) {
+    var waPhone = formatPhone(c.phone)
+    var waLink = waPhone ? 'https://wa.me/' + waPhone : null
+    var subType = SUBSCRIPTION_TYPES.find(function(st) { return st.value === c.subscription_type })
+    return (
+      <div key={c.id} style={s.clientCard}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 2 }}>{c.full_name || '—'}</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>{c.email}</div>
+            {c.phone && <div style={{ fontSize: 12, color: 'var(--muted)' }}>{c.phone}</div>}
+            {c.address && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>📍 {c.address}</div>}
+          </div>
+          <div style={{ textAlign: 'center', minWidth: 50 }}>
+            <div style={{ fontSize: 28, fontWeight: 600, color: (c.credits || 0) > 0 ? GOLD : '#f87171', lineHeight: 1 }}>{c.credits || 0}</div>
+            <div style={{ fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>crédits</div>
+          </div>
+        </div>
+        {subType && <div style={{ fontSize: 11, color: GOLD, marginBottom: 10 }}>⭐ {subType.label}</div>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <select value={c.subscription_type || ''} onChange={function(e) { updateSubscription(c.id, e.target.value) }} style={{ ...s.input, fontSize: 11, padding: '6px 8px', flex: 1 }}>
+            <option value="">Abo: Aucun</option>
+            {SUBSCRIPTION_TYPES.map(function(st) { return <option key={st.value} value={st.value}>{st.label}</option> })}
+          </select>
+          {waLink && <a href={waLink + '?text=' + encodeURIComponent('Bonjour ' + (c.full_name || '').split(' ')[0] + ', ')} target="_blank" style={s.btnWa}>💬</a>}
+          <button onClick={function() { deleteClient(c.id, c.full_name || c.email) }} style={s.btnDeleteSmall}>✕</button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
@@ -299,31 +363,80 @@ export default function Admin({ profile }) {
         {/* CLIENTS */}
         {view === 'clients' && (
           <div style={{ animation: 'fadeIn 0.3s ease' }}>
-            <div style={s.viewHeader}><div style={s.viewTitle}>Clients</div></div>
-            {clients.map(function(c) {
-              return (
-                <div key={c.id} style={s.clientCard}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 15, fontWeight: 500 }}>{c.full_name || '—'}</div>
-                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>{c.email}{c.phone ? ' · ' + c.phone : ''}</div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 28, fontWeight: 600, color: (c.credits || 0) > 0 ? GOLD : '#f87171' }}>{c.credits || 0}</div>
-                      <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase' }}>crédits</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+              <div style={s.viewTitle}>Clients ({clients.length})</div>
+              <button onClick={function() { setShowCreateClient(!showCreateClient) }} style={s.btnGold}>{showCreateClient ? '✕ Fermer' : '+ Créer un client'}</button>
+            </div>
+
+            {showCreateClient && (
+              <div style={{ ...s.card, marginBottom: 24, borderColor: 'rgba(196,151,58,0.3)' }}>
+                <div style={s.cardTitle}>Nouveau client</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ flex: 1 }}><div style={s.fieldLabel}>Prénom Nom *</div><input type="text" value={newClient.fullName} onChange={function(e) { setNewClient(function(f) { return Object.assign({}, f, { fullName: e.target.value }) }) }} placeholder="Jean Dupont" style={s.input} /></div>
+                    <div style={{ flex: 1 }}><div style={s.fieldLabel}>Email *</div><input type="email" value={newClient.email} onChange={function(e) { setNewClient(function(f) { return Object.assign({}, f, { email: e.target.value }) }) }} placeholder="jean@email.com" style={s.input} /></div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ flex: 1 }}><div style={s.fieldLabel}>Téléphone</div><input type="tel" value={newClient.phone} onChange={function(e) { setNewClient(function(f) { return Object.assign({}, f, { phone: e.target.value }) }) }} placeholder="06 12 34 56 78" style={s.input} /></div>
+                    <div style={{ flex: 1 }}>
+                      <div style={s.fieldLabel}>Type de coaching *</div>
+                      <select value={newClient.coachingType} onChange={function(e) { setNewClient(function(f) { return Object.assign({}, f, { coachingType: e.target.value }) }) }} style={s.input}>
+                        <option value="presentiel">🏋️ Présentiel</option>
+                        <option value="domicile">🏠 À domicile</option>
+                        <option value="online">📱 En ligne</option>
+                      </select>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>{c.coaching_type === 'domicile' ? '🏠 Domicile' : c.coaching_type === 'presentiel' ? '🏋️ Salle' : '—'}</span>
-                    <select value={c.subscription_type || ''} onChange={function(e) { updateSubscription(c.id, e.target.value) }} style={{ ...s.input, flex: 'none', fontSize: 12, padding: '6px 10px', maxWidth: 200 }}>
-                      <option value="">Abo: Aucun</option>
-                      {SUBSCRIPTION_TYPES.map(function(st) { return <option key={st.value} value={st.value}>{st.label}{st.price ? ' — ' + st.price : ''}</option> })}
-                    </select>
-                    <div style={{ marginLeft: 'auto' }}><button onClick={function() { deleteClient(c.id, c.full_name || c.email) }} style={s.btnDelete}>Supprimer</button></div>
+                  {newClient.coachingType === 'domicile' && (
+                    <div><div style={s.fieldLabel}>Adresse</div><input type="text" value={newClient.address} onChange={function(e) { setNewClient(function(f) { return Object.assign({}, f, { address: e.target.value }) }) }} placeholder="39 rue Gustave Eiffel, 92110 Clichy" style={s.input} /></div>
+                  )}
+                  <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>Le client recevra un email avec son mot de passe temporaire et un lien vers l'application. Il devra le modifier à sa première connexion.</div>
+                  <button onClick={createClient} disabled={creatingClient} style={s.btnGold}>{creatingClient ? 'Création en cours...' : 'Créer et envoyer l\'invitation'}</button>
+                </div>
+              </div>
+            )}
+
+            {/* Présentiel */}
+            {(function() {
+              var group = clients.filter(function(c) { return c.coaching_type === 'presentiel' })
+              if (group.length === 0) return null
+              return (
+                <div style={{ marginBottom: 28 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: GOLD, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>🏋️ Présentiel <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 400 }}>({group.length})</span></div>
+                  <div style={s.clientsGrid}>
+                    {group.map(function(c) { return renderClientCard(c) })}
                   </div>
                 </div>
               )
-            })}
+            })()}
+
+            {/* Domicile */}
+            {(function() {
+              var group = clients.filter(function(c) { return c.coaching_type === 'domicile' })
+              if (group.length === 0) return null
+              return (
+                <div style={{ marginBottom: 28 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: GOLD, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>🏠 À domicile <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 400 }}>({group.length})</span></div>
+                  <div style={s.clientsGrid}>
+                    {group.map(function(c) { return renderClientCard(c) })}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Online */}
+            {(function() {
+              var group = clients.filter(function(c) { return c.coaching_type !== 'presentiel' && c.coaching_type !== 'domicile' })
+              if (group.length === 0) return null
+              return (
+                <div style={{ marginBottom: 28 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: GOLD, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>📱 En ligne <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 400 }}>({group.length})</span></div>
+                  <div style={s.clientsGrid}>
+                    {group.map(function(c) { return renderClientCard(c) })}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )}
 
@@ -444,7 +557,10 @@ var s = {
   card: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '24px', marginBottom: 16 },
   cardTitle: { fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#C4973A', marginBottom: 20 },
   bookingRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 8 },
-  clientCard: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px', marginBottom: 12 },
+  clientCard: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '18px' },
+  clientsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 },
+  btnWa: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.3)', borderRadius: 8, fontSize: 16, textDecoration: 'none', cursor: 'pointer', flexShrink: 0 },
+  btnDeleteSmall: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, background: 'none', border: '1px solid rgba(248,113,113,0.3)', color: '#f87171', borderRadius: 8, fontSize: 14, cursor: 'pointer', flexShrink: 0 },
   fieldLabel: { fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 6 },
   input: { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', color: 'var(--text)', fontSize: 13, fontFamily: 'Outfit, sans-serif', width: '100%', outline: 'none', boxSizing: 'border-box' },
   btnGold: { background: '#C4973A', color: '#000', border: 'none', borderRadius: 8, padding: '12px 24px', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'Outfit, sans-serif', whiteSpace: 'nowrap' },

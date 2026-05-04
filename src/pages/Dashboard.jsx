@@ -38,6 +38,10 @@ export default function Dashboard({ profile, setProfile }) {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [shopTab, setShopTab] = useState('seances')
+  const [forcePw, setForcePw] = useState('')
+  const [forceConfirmPw, setForceConfirmPw] = useState('')
+  const [forcePwSaving, setForcePwSaving] = useState(false)
+  const [forcePwError, setForcePwError] = useState('')
 
   const sub = SUBSCRIPTIONS[profile.subscription_type] || SUBSCRIPTIONS[profile.coaching_type] || null
 
@@ -74,6 +78,39 @@ export default function Dashboard({ profile, setProfile }) {
 
       {!profile.address && (profile.coaching_type === 'domicile' || profile.coaching_type === 'presentiel') && (
         <AddressSetup profile={profile} onComplete={function() { setProfile(function(p) { return Object.assign({}, p, { address: 'set' }) }) }} />
+      )}
+
+      {/* CHANGEMENT MOT DE PASSE OBLIGATOIRE */}
+      {profile.must_change_password && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '40px 32px', maxWidth: 420, width: '90%', textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>🔐</div>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 24, marginBottom: 8 }}>Bienvenue !</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 28, lineHeight: 1.6 }}>Pour sécuriser ton compte, choisis un nouveau mot de passe.</div>
+            {forcePwError && <div style={{ fontSize: 12, color: '#f87171', marginBottom: 12, padding: '10px', background: 'rgba(248,113,113,0.1)', borderRadius: 8 }}>{forcePwError}</div>}
+            <div style={{ marginBottom: 14, textAlign: 'left' }}>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 6 }}>Nouveau mot de passe</div>
+              <input type="password" value={forcePw} onChange={function(e) { setForcePw(e.target.value) }} placeholder="6 caractères minimum" style={{ width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', color: 'var(--text)', fontSize: 14, fontFamily: 'Outfit, sans-serif', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ marginBottom: 20, textAlign: 'left' }}>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 6 }}>Confirmer</div>
+              <input type="password" value={forceConfirmPw} onChange={function(e) { setForceConfirmPw(e.target.value) }} placeholder="Confirmer le mot de passe" style={{ width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', color: 'var(--text)', fontSize: 14, fontFamily: 'Outfit, sans-serif', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <button onClick={async function() {
+              setForcePwError('')
+              if (forcePw.length < 6) { setForcePwError('Le mot de passe doit faire au moins 6 caractères.'); return }
+              if (forcePw !== forceConfirmPw) { setForcePwError('Les mots de passe ne correspondent pas.'); return }
+              setForcePwSaving(true)
+              var res = await supabase.auth.updateUser({ password: forcePw })
+              if (res.error) { setForcePwError(res.error.message); setForcePwSaving(false); return }
+              await supabase.from('profiles').update({ must_change_password: false }).eq('id', profile.id)
+              setProfile(function(p) { return Object.assign({}, p, { must_change_password: false }) })
+              setForcePwSaving(false)
+            }} disabled={forcePwSaving} style={{ width: '100%', background: GOLD, color: '#000', border: 'none', borderRadius: 8, padding: '14px', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'Outfit, sans-serif' }}>
+              {forcePwSaving ? 'Enregistrement...' : 'Valider mon nouveau mot de passe'}
+            </button>
+          </div>
+        </div>
       )}
 
       <nav style={s.nav}>
