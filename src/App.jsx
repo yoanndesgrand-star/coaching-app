@@ -92,11 +92,16 @@ export default function App() {
     </Routes>
   )
 
-  if (!profile) return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'var(--bg)', color:'#f87171', fontSize:14 }}>
-      Profil introuvable. Contacte le support.
-    </div>
-  )
+  if (!profile) {
+    // Profil supprimé ou inexistant → déconnexion automatique
+    supabase.auth.signOut()
+    return (
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'var(--bg)', flexDirection:'column', gap:16 }}>
+        <div style={{ fontFamily:'Cormorant Garamond, serif', fontSize:24, color:'var(--text)' }}>Session expirée</div>
+        <div style={{ fontSize:13, color:'var(--muted)' }}>Reconnecte-toi pour accéder à ton espace.</div>
+      </div>
+    )
+  }
 
   return (
     <Routes>
