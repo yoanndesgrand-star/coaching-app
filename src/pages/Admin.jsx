@@ -85,7 +85,7 @@ export default function Admin({ profile }) {
   async function cancelBooking(bookingId) {
     setCancelling(bookingId)
     try {
-      var res = await fetch('/api/admin-cancel', {
+      var res = await fetch('/api/admin-actions?action=cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId: bookingId })
@@ -109,7 +109,7 @@ export default function Admin({ profile }) {
     var endDate = new Date(new Date(startTime).getTime() + duration * 60000)
     var endTime = endDate.toISOString()
     try {
-      var res = await fetch('/api/admin-book', {
+      var res = await fetch('/api/admin-actions?action=book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientId: bookForm.clientId, startTime: startTime, endTime: endTime })
@@ -156,7 +156,7 @@ export default function Admin({ profile }) {
     if (!newClient.email || !newClient.fullName || !newClient.coachingType) { setMsg({ type: 'error', text: 'Email, nom et type requis.' }); return }
     setCreatingClient(true)
     try {
-      var res = await fetch('/api/admin-create-client', {
+      var res = await fetch('/api/admin-actions?action=create-client', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newClient)

@@ -54,7 +54,7 @@ export default function BookingCalendar({ profile, onBooked }) {
         loadSlots()
 
         // Envoyer email de confirmation (silencieux, ne bloque pas)
-        fetch('/api/send-confirmation', {
+        fetch('/api/email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

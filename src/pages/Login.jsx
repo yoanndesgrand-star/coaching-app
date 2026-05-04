@@ -70,7 +70,7 @@ export default function Login() {
 
       // Notifier l'admin
       try {
-        await fetch('/api/notify-admin-signup', {
+        await fetch('/api/email?action=signup-notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
