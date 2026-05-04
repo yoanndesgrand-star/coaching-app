@@ -121,11 +121,21 @@ export default function Dashboard({ profile, setProfile }) {
                 <div style={s.tileTitle}>Acheter</div>
                 <div style={s.tileSub}>Séances & packs</div>
               </button>
+              <button onClick={function() { setView('subscription') }} style={s.tile}>
+                <div style={s.tileIcon}>⭐</div>
+                <div style={s.tileTitle}>Abonnement</div>
+                <div style={s.tileSub}>{sub ? sub.label : 'Aucun'}</div>
+              </button>
               <button onClick={function() { setView('settings') }} style={s.tile}>
                 <div style={s.tileIcon}>⚙️</div>
                 <div style={s.tileTitle}>Paramètres</div>
                 <div style={s.tileSub}>Profil & infos</div>
               </button>
+              <a href={WHATSAPP + '?text=Bonjour%20Yoann%2C%20j%27ai%20une%20question.'} target="_blank" style={{ ...s.tile, textDecoration: 'none', color: 'var(--text)' }}>
+                <div style={s.tileIcon}>💬</div>
+                <div style={s.tileTitle}>Contact</div>
+                <div style={s.tileSub}>WhatsApp</div>
+              </a>
             </div>
 
             {nextBooking && (
@@ -148,10 +158,6 @@ export default function Dashboard({ profile, setProfile }) {
               </div>
             )}
 
-            <div style={s.contactBar}>
-              <span style={{ fontSize: 13, color: 'var(--muted)' }}>Une question ?</span>
-              <a href={WHATSAPP + '?text=Bonjour%20Yoann%2C%20j%27ai%20une%20question.'} target="_blank" style={s.btnGoldSmall}>💬 WhatsApp</a>
-            </div>
           </div>
         )}
 
@@ -247,6 +253,39 @@ export default function Dashboard({ profile, setProfile }) {
           </div>
         )}
 
+        {view === 'subscription' && (
+          <div style={{ animation: 'fadeIn 0.3s ease' }}>
+            <div style={s.viewHeader}><div style={s.viewTitle}>Mon abonnement</div></div>
+            <div style={s.settingsCard}>
+              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>⭐</div>
+                <div style={{ fontSize: 20, fontWeight: 500, marginBottom: 8 }}>{sub ? sub.label : 'Aucun abonnement'}</div>
+                <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24 }}>
+                  {sub ? 'Ton abonnement est actif.' : 'Tu n\'as pas encore d\'abonnement.'}
+                </div>
+                <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '20px', marginBottom: 20 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <span style={{ fontSize: 13, color: 'var(--muted)' }}>Type de coaching</span>
+                    <span style={{ fontSize: 13 }}>{profile.coaching_type === 'domicile' ? '🏠 À domicile' : '🏋️ En salle'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <span style={{ fontSize: 13, color: 'var(--muted)' }}>Crédits restants</span>
+                    <span style={{ fontSize: 13, color: GOLD, fontWeight: 600 }}>{profile.credits || 0}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 13, color: 'var(--muted)' }}>Lieu</span>
+                    <span style={{ fontSize: 13 }}>{locationLabel}</span>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.7 }}>
+                  Pour modifier ton abonnement ou en souscrire un, contacte Yoann.
+                </div>
+                <a href={WHATSAPP + '?text=Bonjour%20Yoann%2C%20je%20souhaite%20modifier%20mon%20abonnement.'} target="_blank" style={{ ...s.btnGold, marginTop: 16, display: 'inline-block', textDecoration: 'none' }}>Contacter Yoann</a>
+              </div>
+            </div>
+          </div>
+        )}
+
         {view === 'settings' && (
           <div style={{ animation: 'fadeIn 0.3s ease' }}>
             <div style={s.viewHeader}><div style={s.viewTitle}>Mes paramètres</div></div>
@@ -321,7 +360,7 @@ var s = {
   navLogo: { fontFamily:'Cormorant Garamond, serif', fontSize:18, fontWeight:400 },
   btnNav: { background:'none', border:'1px solid var(--border)', color:'var(--muted)', borderRadius:6, padding:'7px 14px', fontSize:12, cursor:'pointer', fontFamily:'Outfit, sans-serif' },
   container: { maxWidth:900, margin:'0 auto', padding:'32px 20px', position:'relative', zIndex:1 },
-  tilesGrid: { display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:14, marginBottom:24 },
+  tilesGrid: { display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:14, marginBottom:24 },
   tile: { background:'var(--surface)', border:'1px solid var(--border)', borderRadius:16, padding:'28px 20px', cursor:'pointer', fontFamily:'Outfit, sans-serif', textAlign:'center', transition:'all 0.2s', display:'flex', flexDirection:'column', alignItems:'center', gap:6 },
   tileIcon: { fontSize:32, marginBottom:4 },
   tileTitle: { fontSize:15, fontWeight:500, color:'var(--text)' },
