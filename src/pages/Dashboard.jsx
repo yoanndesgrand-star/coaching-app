@@ -37,6 +37,7 @@ export default function Dashboard({ profile, setProfile }) {
   const [savingSettings, setSavingSettings] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [shopTab, setShopTab] = useState('seances')
 
   const sub = SUBSCRIPTIONS[profile.subscription_type] || SUBSCRIPTIONS[profile.coaching_type] || null
 
@@ -117,14 +118,9 @@ export default function Dashboard({ profile, setProfile }) {
                 <div style={s.tileSub}>{upcomingBookings.length} séance{upcomingBookings.length > 1 ? 's' : ''} à venir</div>
               </button>
               <button onClick={function() { setView('shop') }} style={s.tile}>
-                <div style={s.tileIcon}>💳</div>
+                <div style={s.tileIcon}>🛒</div>
                 <div style={s.tileTitle}>Acheter</div>
-                <div style={s.tileSub}>Séances & packs</div>
-              </button>
-              <button onClick={function() { setView('subscription') }} style={s.tile}>
-                <div style={s.tileIcon}>⭐</div>
-                <div style={s.tileTitle}>Abonnement</div>
-                <div style={s.tileSub}>{sub ? sub.label : 'Aucun'}</div>
+                <div style={s.tileSub}>Séances & abonnements</div>
               </button>
               <button onClick={function() { setView('settings') }} style={s.tile}>
                 <div style={s.tileIcon}>⚙️</div>
@@ -222,67 +218,85 @@ export default function Dashboard({ profile, setProfile }) {
 
         {view === 'shop' && (
           <div style={{ animation: 'fadeIn 0.3s ease' }}>
-            <div style={s.viewHeader}><div style={s.viewTitle}>Acheter des séances</div></div>
-            <div style={s.contactBar}>
-              <div><div style={{ fontSize: 14, fontWeight: 500 }}>Payer sur place</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>Espèces ou CB</div></div>
-              <a href={WHATSAPP + '?text=Bonjour%20Yoann%2C%20je%20souhaite%20acheter%20des%20séances.'} target="_blank" style={s.btnGoldSmall}>Contacter</a>
-            </div>
-            <div style={s.shopGrid}>
-              <div style={s.shopCard}>
-                <div style={s.shopLabel}>À l'unité</div>
-                <div style={s.shopTitle}>Séance individuelle</div>
-                <div style={s.shopPrice}>{profile.coaching_type === 'domicile' ? '60€' : '50€'}<span style={s.shopPer}>/séance</span></div>
-                <a href={profile.coaching_type === 'domicile' ? STRIPE.seance_60 : STRIPE.seance_50} target="_blank" style={s.btnShop}>Payer</a>
-              </div>
-              <div style={s.shopCard}>
-                <div style={s.shopLabel}>Pack 5</div>
-                <div style={s.shopTitle}>Programme Court</div>
-                <div style={s.shopPrice}>{profile.coaching_type === 'domicile' ? '275€' : '250€'}<span style={s.shopPer}> {profile.coaching_type === 'domicile' ? '55€' : '50€'}/séance</span></div>
-                <div style={s.shopSaving}>Économie {profile.coaching_type === 'domicile' ? '25€' : '50€'}</div>
-                <a href={profile.coaching_type === 'domicile' ? STRIPE.pack5_275 : STRIPE.pack5_250} target="_blank" style={s.btnShop}>Payer</a>
-              </div>
-              <div style={{ ...s.shopCard, borderColor: GOLD, position: 'relative' }}>
-                <div style={s.shopBest}>Meilleure offre</div>
-                <div style={s.shopLabel}>Pack 10</div>
-                <div style={s.shopTitle}>Programme SHIFT</div>
-                <div style={s.shopPrice}>500€<span style={s.shopPer}> 50€/séance</span></div>
-                <div style={s.shopSaving}>Économie 100€</div>
-                <a href={STRIPE.pack10} target="_blank" style={s.btnShop}>Payer</a>
-              </div>
-            </div>
-          </div>
-        )}
+            <div style={s.viewHeader}><div style={s.viewTitle}>Acheter & Souscrire</div></div>
 
-        {view === 'subscription' && (
-          <div style={{ animation: 'fadeIn 0.3s ease' }}>
-            <div style={s.viewHeader}><div style={s.viewTitle}>Mon abonnement</div></div>
-            <div style={s.settingsCard}>
-              <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                <div style={{ fontSize: 48, marginBottom: 16 }}>⭐</div>
-                <div style={{ fontSize: 20, fontWeight: 500, marginBottom: 8 }}>{sub ? sub.label : 'Aucun abonnement'}</div>
-                <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24 }}>
-                  {sub ? 'Ton abonnement est actif.' : 'Tu n\'as pas encore d\'abonnement.'}
-                </div>
-                <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '20px', marginBottom: 20 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <span style={{ fontSize: 13, color: 'var(--muted)' }}>Type de coaching</span>
-                    <span style={{ fontSize: 13 }}>{profile.coaching_type === 'domicile' ? '🏠 À domicile' : '🏋️ En salle'}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <span style={{ fontSize: 13, color: 'var(--muted)' }}>Crédits restants</span>
-                    <span style={{ fontSize: 13, color: GOLD, fontWeight: 600 }}>{profile.credits || 0}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 13, color: 'var(--muted)' }}>Lieu</span>
-                    <span style={{ fontSize: 13 }}>{locationLabel}</span>
-                  </div>
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.7 }}>
-                  Pour modifier ton abonnement ou en souscrire un, contacte Yoann.
-                </div>
-                <a href={WHATSAPP + '?text=Bonjour%20Yoann%2C%20je%20souhaite%20modifier%20mon%20abonnement.'} target="_blank" style={{ ...s.btnGold, marginTop: 16, display: 'inline-block', textDecoration: 'none' }}>Contacter Yoann</a>
-              </div>
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+              <button onClick={function() { setShopTab('seances') }} style={{ ...s.shopTabBtn, ...(shopTab === 'seances' ? { borderColor: GOLD, color: GOLD, background: 'rgba(196,151,58,0.08)' } : {}) }}>🏋️ Séances de coaching</button>
+              <button onClick={function() { setShopTab('abonnements') }} style={{ ...s.shopTabBtn, ...(shopTab === 'abonnements' ? { borderColor: GOLD, color: GOLD, background: 'rgba(196,151,58,0.08)' } : {}) }}>📱 Abonnements en ligne</button>
             </div>
+
+            {/* Current subscription banner */}
+            {sub && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: 'rgba(196,151,58,0.06)', border: '1px solid rgba(196,151,58,0.2)', borderRadius: 10, marginBottom: 20 }}>
+                <div><div style={{ fontSize: 12, color: 'var(--muted)' }}>Mon abonnement actuel</div><div style={{ fontSize: 14, fontWeight: 500, marginTop: 2 }}>⭐ {sub.label}</div></div>
+                <div style={{ fontSize: 13, color: GOLD, fontWeight: 600 }}>{profile.credits || 0} crédits</div>
+              </div>
+            )}
+
+            {/* SÉANCES */}
+            {shopTab === 'seances' && (
+              <div>
+                <div style={s.contactBar}>
+                  <div><div style={{ fontSize: 14, fontWeight: 500 }}>Payer sur place</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>Espèces ou CB</div></div>
+                  <a href={WHATSAPP + '?text=Bonjour%20Yoann%2C%20je%20souhaite%20acheter%20des%20séances.'} target="_blank" style={s.btnGoldSmall}>Contacter</a>
+                </div>
+                <div style={s.shopGrid}>
+                  <div style={s.shopCard}>
+                    <div style={s.shopLabel}>À l'unité</div>
+                    <div style={s.shopTitle}>Séance individuelle</div>
+                    <div style={s.shopPrice}>{profile.coaching_type === 'domicile' ? '60€' : '50€'}<span style={s.shopPer}>/séance</span></div>
+                    <a href={profile.coaching_type === 'domicile' ? STRIPE.seance_60 : STRIPE.seance_50} target="_blank" style={s.btnShop}>Payer</a>
+                  </div>
+                  <div style={s.shopCard}>
+                    <div style={s.shopLabel}>Pack 5</div>
+                    <div style={s.shopTitle}>Programme Court</div>
+                    <div style={s.shopPrice}>{profile.coaching_type === 'domicile' ? '275€' : '250€'}<span style={s.shopPer}> {profile.coaching_type === 'domicile' ? '55€' : '50€'}/séance</span></div>
+                    <div style={s.shopSaving}>Économie {profile.coaching_type === 'domicile' ? '25€' : '50€'}</div>
+                    <a href={profile.coaching_type === 'domicile' ? STRIPE.pack5_275 : STRIPE.pack5_250} target="_blank" style={s.btnShop}>Payer</a>
+                  </div>
+                  <div style={{ ...s.shopCard, borderColor: GOLD, position: 'relative' }}>
+                    <div style={s.shopBest}>Meilleure offre</div>
+                    <div style={s.shopLabel}>Pack 10</div>
+                    <div style={s.shopTitle}>Programme SHIFT</div>
+                    <div style={s.shopPrice}>500€<span style={s.shopPer}> 50€/séance</span></div>
+                    <div style={s.shopSaving}>Économie 100€</div>
+                    <a href={STRIPE.pack10} target="_blank" style={s.btnShop}>Payer</a>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ABONNEMENTS */}
+            {shopTab === 'abonnements' && (
+              <div>
+                <div style={s.shopGrid}>
+                  <div style={s.shopCard}>
+                    <div style={s.shopLabel}>Sport</div>
+                    <div style={s.shopTitle}>Programme Sport en ligne</div>
+                    <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6, marginBottom: 8 }}>Programme d'entraînement personnalisé accessible depuis ton téléphone.</div>
+                    <div style={s.shopPrice}>59€<span style={s.shopPer}>/mois</span></div>
+                    <a href={STRIPE.sport} target="_blank" style={s.btnShop}>Souscrire</a>
+                  </div>
+                  <div style={s.shopCard}>
+                    <div style={s.shopLabel}>Nutrition</div>
+                    <div style={s.shopTitle}>Suivi Nutritionnel</div>
+                    <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6, marginBottom: 8 }}>Plan alimentaire personnalisé avec suivi hebdomadaire.</div>
+                    <div style={s.shopPrice}>119€<span style={s.shopPer}>/mois</span></div>
+                    <a href={STRIPE.nutrition} target="_blank" style={s.btnShop}>Souscrire</a>
+                  </div>
+                  <div style={{ ...s.shopCard, borderColor: GOLD, position: 'relative' }}>
+                    <div style={s.shopBest}>Meilleure offre</div>
+                    <div style={s.shopLabel}>Sport + Nutrition</div>
+                    <div style={s.shopTitle}>Programme Complet</div>
+                    <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6, marginBottom: 8 }}>Sport en ligne + suivi nutritionnel combinés.</div>
+                    <div style={s.shopPrice}>149€<span style={s.shopPer}>/mois</span></div>
+                    <div style={s.shopSaving}>Économie 29€/mois</div>
+                    <a href={STRIPE.sport_nutri} target="_blank" style={s.btnShop}>Souscrire</a>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -378,6 +392,7 @@ var s = {
   bookingRow: { display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:8, marginBottom:8 },
   emptyCard: { textAlign:'center', padding:'48px 24px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:16 },
   shopGrid: { display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:12, marginTop:16 },
+  shopTabBtn: { flex:1, background:'var(--surface)', border:'1px solid var(--border)', color:'var(--muted)', borderRadius:8, padding:'12px 16px', fontSize:13, cursor:'pointer', fontFamily:'Outfit, sans-serif', transition:'all 0.2s' },
   shopCard: { background:'var(--surface)', border:'1px solid var(--border)', borderRadius:12, padding:'24px 18px', display:'flex', flexDirection:'column', gap:8 },
   shopLabel: { fontSize:10, fontWeight:600, letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--muted)' },
   shopTitle: { fontFamily:'Cormorant Garamond, serif', fontSize:19 },
