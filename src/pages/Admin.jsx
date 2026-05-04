@@ -94,7 +94,17 @@ export default function Admin({ profile }) {
 
   async function updateSubscription(clientId, val) {
     await supabase.from('profiles').update({ subscription_type: val }).eq('id', clientId)
-    setMsg({ type: 'success', text: 'Abonnement mis à jour.' })
+    var client = clients.find(function(c) { return c.id === clientId })
+    if (client && val) {
+      try {
+        await fetch('/api/email?action=subscription', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientEmail: client.email, clientName: client.full_name, subscriptionType: val })
+        })
+      } catch (e) {}
+    }
+    setMsg({ type: 'success', text: 'Abonnement mis à jour.' + (val && (val.includes('nutrition') || val === 'nutrition') ? ' Email avec questionnaire envoyé.' : '') })
     loadAll()
   }
 
