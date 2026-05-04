@@ -42,6 +42,14 @@ export default function Dashboard({ profile, setProfile }) {
   const [forceConfirmPw, setForceConfirmPw] = useState('')
   const [forcePwSaving, setForcePwSaving] = useState(false)
   const [forcePwError, setForcePwError] = useState('')
+  const [theme, setThemeState] = useState(localStorage.getItem('theme') || 'dark')
+
+  function setTheme(t) {
+    setThemeState(t)
+    if (t === 'light') document.documentElement.setAttribute('data-theme', 'light')
+    else document.documentElement.removeAttribute('data-theme')
+    localStorage.setItem('theme', t)
+  }
 
   const sub = SUBSCRIPTIONS[profile.subscription_type] || SUBSCRIPTIONS[profile.coaching_type] || null
 
@@ -351,6 +359,15 @@ export default function Dashboard({ profile, setProfile }) {
                 <div style={s.settingsField}><div style={s.settingsLabel}>Lieu</div><div style={{ fontSize: 13, padding: '12px 0', color: 'var(--muted)' }}>📍 ON AIR BNF — 93 av. de France, Paris 13e</div></div>
               )}
               <div style={{ borderTop: '1px solid var(--border)', margin: '20px 0', paddingTop: 20 }}>
+                <div style={s.settingsField}>
+                  <div style={s.settingsLabel}>Apparence</div>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button onClick={function() { setTheme('dark') }} style={{ flex: 1, padding: '14px', borderRadius: 8, border: '1px solid var(--border)', background: theme === 'dark' ? 'rgba(196,151,58,0.15)' : 'var(--surface)', borderColor: theme === 'dark' ? 'rgba(196,151,58,0.4)' : 'var(--border)', cursor: 'pointer', color: 'var(--text)', fontFamily: 'Outfit, sans-serif', fontSize: 13 }}>🌙 Sombre</button>
+                    <button onClick={function() { setTheme('light') }} style={{ flex: 1, padding: '14px', borderRadius: 8, border: '1px solid var(--border)', background: theme === 'light' ? 'rgba(196,151,58,0.15)' : 'var(--surface)', borderColor: theme === 'light' ? 'rgba(196,151,58,0.4)' : 'var(--border)', cursor: 'pointer', color: 'var(--text)', fontFamily: 'Outfit, sans-serif', fontSize: 13 }}>☀️ Clair</button>
+                  </div>
+                </div>
+              </div>
+              <div style={{ borderTop: '1px solid var(--border)', margin: '20px 0', paddingTop: 20 }}>
                 <div style={s.settingsField}><div style={s.settingsLabel}>Nouveau mot de passe</div><input type="password" value={newPassword} onChange={function(e) { setNewPassword(e.target.value) }} placeholder="Laisser vide pour ne pas changer" style={s.settingsInput} /></div>
                 <div style={s.settingsField}><div style={s.settingsLabel}>Confirmer le mot de passe</div><input type="password" value={confirmPassword} onChange={function(e) { setConfirmPassword(e.target.value) }} placeholder="Confirmer le nouveau mot de passe" style={s.settingsInput} /></div>
               </div>
@@ -407,7 +424,7 @@ function formatTime(iso) {
 }
 
 var s = {
-  nav: { position:'sticky', top:0, zIndex:50, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 24px', background:'rgba(8,8,8,0.95)', backdropFilter:'blur(8px)', borderBottom:'1px solid var(--border)' },
+  nav: { position:'sticky', top:0, zIndex:50, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 24px', background:'var(--bg)', backdropFilter:'blur(8px)', borderBottom:'1px solid var(--border)' },
   navLogo: { fontFamily:'Cormorant Garamond, serif', fontSize:18, fontWeight:400 },
   btnNav: { background:'none', border:'1px solid var(--border)', color:'var(--muted)', borderRadius:6, padding:'7px 14px', fontSize:12, cursor:'pointer', fontFamily:'Outfit, sans-serif' },
   container: { maxWidth:900, margin:'0 auto', padding:'32px 20px', position:'relative', zIndex:1 },

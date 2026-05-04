@@ -13,6 +13,10 @@ export default function App() {
   const [isPasswordReset, setIsPasswordReset] = useState(false)
 
   useEffect(() => {
+    // Load saved theme
+    const savedTheme = localStorage.getItem('theme')
+    if (savedTheme === 'light') document.documentElement.setAttribute('data-theme', 'light')
+
     const hash = window.location.hash
     if (hash.includes('type=recovery')) {
       setIsPasswordReset(true)
@@ -74,7 +78,7 @@ export default function App() {
   if (isPasswordReset) return <ResetPassword />
 
   if (loading) return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'#080808' }}>
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'var(--bg)' }}>
       <div style={{ textAlign:'center' }}>
         <div style={{ fontFamily:'Cormorant Garamond, serif', fontSize:32, color:'#C4973A', marginBottom:8 }}>Yoann Desgrand</div>
         <div style={{ fontSize:13, color:'#7a7065' }}>Chargement…</div>
@@ -89,7 +93,7 @@ export default function App() {
   )
 
   if (!profile) return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'#080808', color:'#f87171', fontSize:14 }}>
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'var(--bg)', color:'#f87171', fontSize:14 }}>
       Profil introuvable. Contacte le support.
     </div>
   )

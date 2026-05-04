@@ -9,6 +9,7 @@ export default function Login() {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [phone, setPhone] = useState('')
+  const [phonePrefix, setPhonePrefix] = useState('+33')
   const [coachingType, setCoachingType] = useState('')
   const [address, setAddress] = useState('')
   const [hasOnairAccess, setHasOnairAccess] = useState(false)
@@ -33,6 +34,10 @@ export default function Login() {
     if (!coachingType) { setError('Merci de choisir ton type de coaching.'); setLoading(false); return }
     if (coachingType === 'presentiel' && !hasOnairAccess) { setError('Merci de confirmer ton accès à la salle ON AIR.'); setLoading(false); return }
     if (coachingType === 'domicile' && !address.trim()) { setError('Merci de renseigner ton adresse domicile.'); setLoading(false); return }
+    if (phone.trim()) {
+      const cleanPhone = phone.replace(/\s+/g, '')
+      if (!/^\d{9,10}$/.test(cleanPhone)) { setError('Le numéro de téléphone n\'est pas valide. Entre 9 ou 10 chiffres après l\'indicatif.'); setLoading(false); return }
+    }
     if (password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); setLoading(false); return }
 
     const { data, error: signupError } = await supabase.auth.signUp({
@@ -50,16 +55,32 @@ export default function Login() {
         ? address.trim()
         : null
 
+      const fullPhone = phone.trim() ? phonePrefix + phone.replace(/\s+/g, '').replace(/^0/, '') : ''
+
       await supabase.from('profiles').upsert({
         id: data.user.id,
         email: email,
         full_name: `${firstName.trim()} ${lastName.trim()}`,
-        phone: phone.trim(),
+        phone: fullPhone,
         coaching_type: coachingType,
         address: profileAddress,
         is_admin: false,
         credits: 0,
       }, { onConflict: 'id' })
+
+      // Notifier l'admin
+      try {
+        await fetch('/api/notify-admin-signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientName: `${firstName.trim()} ${lastName.trim()}`,
+            clientEmail: email,
+            clientPhone: fullPhone,
+            coachingType: coachingType
+          })
+        })
+      } catch(e) {}
     }
 
     setSuccess('Compte créé ! Tu peux maintenant te connecter.')
@@ -120,7 +141,22 @@ export default function Login() {
                 <input type="text" placeholder="Nom" value={lastName} onChange={e => setLastName(e.target.value)} style={s.input} />
               </div>
 
-              <input type="tel" placeholder="Téléphone (ex: 06 12 34 56 78)" value={phone} onChange={e => setPhone(e.target.value)} style={s.input} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <select value={phonePrefix} onChange={e => setPhonePrefix(e.target.value)} style={{ ...s.input, flex: 'none', width: 90, padding: '12px 8px' }}>
+                  <option value="+33">🇫🇷 +33</option>
+                  <option value="+32">🇧🇪 +32</option>
+                  <option value="+41">🇨🇭 +41</option>
+                  <option value="+44">🇬🇧 +44</option>
+                  <option value="+1">🇺🇸 +1</option>
+                  <option value="+34">🇪🇸 +34</option>
+                  <option value="+39">🇮🇹 +39</option>
+                  <option value="+49">🇩🇪 +49</option>
+                  <option value="+212">🇲🇦 +212</option>
+                  <option value="+213">🇩🇿 +213</option>
+                  <option value="+216">🇹🇳 +216</option>
+                </select>
+                <input type="tel" placeholder="6 12 34 56 78" value={phone} onChange={e => setPhone(e.target.value)} style={{ ...s.input, flex: 1 }} />
+              </div>
               <input type="email" placeholder="ton@email.com" value={email} onChange={e => setEmail(e.target.value)} style={s.input} />
               <input type="password" placeholder="Mot de passe (8 caractères min)" value={password} onChange={e => setPassword(e.target.value)} style={s.input} />
 

@@ -31,6 +31,9 @@ export default function Admin({ profile }) {
   var [showCreateClient, setShowCreateClient] = useState(false)
   var [newClient, setNewClient] = useState({ email: '', fullName: '', phone: '', coachingType: 'presentiel', address: '' })
   var [creatingClient, setCreatingClient] = useState(false)
+  var [editingClient, setEditingClient] = useState(null)
+  var [editClientData, setEditClientData] = useState({})
+  var [savingClient, setSavingClient] = useState(false)
 
   useEffect(function() { loadAll() }, [])
 
@@ -175,14 +178,59 @@ export default function Admin({ profile }) {
     if (!phone) return null
     var clean = phone.replace(/\D/g, '')
     if (clean.startsWith('0')) clean = '33' + clean.slice(1)
-    if (!clean.startsWith('33')) clean = '33' + clean
+    if (!clean.startsWith('33') && !clean.startsWith('44') && !clean.startsWith('32') && !clean.startsWith('41')) clean = '33' + clean
     return clean
+  }
+
+  async function saveClient() {
+    if (!editingClient) return
+    setSavingClient(true)
+    await supabase.from('profiles').update({
+      full_name: editClientData.full_name || '',
+      phone: editClientData.phone || '',
+      email: editClientData.email || '',
+      coaching_type: editClientData.coaching_type || 'presentiel',
+      address: editClientData.address || ''
+    }).eq('id', editingClient)
+    setMsg({ type: 'success', text: 'Client mis à jour.' })
+    setEditingClient(null)
+    setSavingClient(false)
+    loadAll()
   }
 
   function renderClientCard(c) {
     var waPhone = formatPhone(c.phone)
     var waLink = waPhone ? 'https://wa.me/' + waPhone : null
     var subType = SUBSCRIPTION_TYPES.find(function(st) { return st.value === c.subscription_type })
+    var isEditing = editingClient === c.id
+
+    if (isEditing) {
+      return (
+        <div key={c.id} style={{ ...s.clientCard, borderColor: 'rgba(196,151,58,0.4)' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: GOLD, marginBottom: 14 }}>Modifier le client</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div><div style={s.fieldLabel}>Nom</div><input type="text" value={editClientData.full_name || ''} onChange={function(e) { setEditClientData(function(d) { return Object.assign({}, d, { full_name: e.target.value }) }) }} style={s.input} /></div>
+            <div><div style={s.fieldLabel}>Email</div><input type="email" value={editClientData.email || ''} onChange={function(e) { setEditClientData(function(d) { return Object.assign({}, d, { email: e.target.value }) }) }} style={s.input} /></div>
+            <div><div style={s.fieldLabel}>Téléphone</div><input type="tel" value={editClientData.phone || ''} onChange={function(e) { setEditClientData(function(d) { return Object.assign({}, d, { phone: e.target.value }) }) }} style={s.input} /></div>
+            <div><div style={s.fieldLabel}>Type</div>
+              <select value={editClientData.coaching_type || ''} onChange={function(e) { setEditClientData(function(d) { return Object.assign({}, d, { coaching_type: e.target.value }) }) }} style={s.input}>
+                <option value="presentiel">🏋️ Présentiel</option>
+                <option value="domicile">🏠 À domicile</option>
+                <option value="online">📱 En ligne</option>
+              </select>
+            </div>
+            {editClientData.coaching_type === 'domicile' && (
+              <div><div style={s.fieldLabel}>Adresse</div><input type="text" value={editClientData.address || ''} onChange={function(e) { setEditClientData(function(d) { return Object.assign({}, d, { address: e.target.value }) }) }} style={s.input} /></div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={saveClient} disabled={savingClient} style={{ ...s.btnGold, flex: 1 }}>{savingClient ? '...' : 'Enregistrer'}</button>
+              <button onClick={function() { setEditingClient(null) }} style={{ ...s.btnNav, flex: 'none' }}>Annuler</button>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div key={c.id} style={s.clientCard}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -203,6 +251,7 @@ export default function Admin({ profile }) {
             <option value="">Abo: Aucun</option>
             {SUBSCRIPTION_TYPES.map(function(st) { return <option key={st.value} value={st.value}>{st.label}</option> })}
           </select>
+          <button onClick={function() { setEditingClient(c.id); setEditClientData({ full_name: c.full_name, email: c.email, phone: c.phone, coaching_type: c.coaching_type, address: c.address }) }} style={s.btnEdit}>✏️</button>
           {waLink && <a href={waLink + '?text=' + encodeURIComponent('Bonjour ' + (c.full_name || '').split(' ')[0] + ', ')} target="_blank" style={s.btnWa}>💬</a>}
           <button onClick={function() { deleteClient(c.id, c.full_name || c.email) }} style={s.btnDeleteSmall}>✕</button>
         </div>
@@ -543,7 +592,7 @@ function fmtTime(iso) {
 }
 
 var s = {
-  nav: { position: 'sticky', top: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', background: 'rgba(8,8,8,0.95)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--border)' },
+  nav: { position: 'sticky', top: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', background: 'var(--bg)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--border)' },
   navLogo: { fontFamily: 'Cormorant Garamond, serif', fontSize: 18 },
   btnNav: { background: 'none', border: '1px solid var(--border)', color: 'var(--muted)', borderRadius: 6, padding: '7px 14px', fontSize: 12, cursor: 'pointer', fontFamily: 'Outfit, sans-serif' },
   container: { maxWidth: 900, margin: '0 auto', padding: '32px 20px' },
@@ -560,6 +609,7 @@ var s = {
   clientCard: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '18px' },
   clientsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 },
   btnWa: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.3)', borderRadius: 8, fontSize: 16, textDecoration: 'none', cursor: 'pointer', flexShrink: 0 },
+  btnEdit: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, background: 'rgba(196,151,58,0.1)', border: '1px solid rgba(196,151,58,0.3)', borderRadius: 8, fontSize: 14, cursor: 'pointer', flexShrink: 0 },
   btnDeleteSmall: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, background: 'none', border: '1px solid rgba(248,113,113,0.3)', color: '#f87171', borderRadius: 8, fontSize: 14, cursor: 'pointer', flexShrink: 0 },
   fieldLabel: { fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 6 },
   input: { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', color: 'var(--text)', fontSize: 13, fontFamily: 'Outfit, sans-serif', width: '100%', outline: 'none', boxSizing: 'border-box' },
