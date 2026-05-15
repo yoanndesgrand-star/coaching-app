@@ -61,8 +61,25 @@ export default async function handler(req, res) {
         await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', booking.id)
         await supabase.from('time_slots').update({ is_available: true }).eq('id', booking.slot_id)
         // Restituer le crédit
-        const { data: p } = await supabase.from('profiles').select('credits').eq('id', booking.client_id).single()
-        if (p) await supabase.from('profiles').update({ credits: (p.credits || 0) + 1 }).eq('id', booking.client_id)
+        const { data: p } = await supabase.from('profiles').select('credits, email, full_name').eq('id', booking.client_id).single()
+        if (p) {
+          await supabase.from('profiles').update({ credits: (p.credits || 0) + 1 }).eq('id', booking.client_id)
+          // Notifier le client par email
+          if (p.email) {
+            try {
+              await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.RESEND_API_KEY },
+                body: JSON.stringify({
+                  from: process.env.EMAIL_FROM || 'Yoann Desgrand <onboarding@resend.dev>',
+                  to: p.email,
+                  subject: '❌ Séance annulée — Crédit restitué',
+                  html: '<div style="font-family:Arial;max-width:500px;margin:0 auto;background:#080808;color:#f0ece4;border-radius:12px;overflow:hidden"><div style="background:#161410;padding:32px 28px;text-align:center;border-bottom:1px solid #2a2520"><div style="font-family:Georgia;font-size:22px">Yoann <span style="color:#C4973A">Desgrand</span></div></div><div style="padding:32px 28px"><div style="font-size:18px;margin-bottom:24px">Séance annulée ❌</div><div style="background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);border-radius:8px;padding:14px;color:#4ade80;font-size:13px">💳 Ton crédit a été restitué. Tu peux réserver un nouveau créneau.</div></div></div>'
+                })
+              })
+            } catch (e) {}
+          }
+        }
         
         console.log('Booking cancelled via Google Calendar:', booking.id, 'Event:', event.id)
       }
