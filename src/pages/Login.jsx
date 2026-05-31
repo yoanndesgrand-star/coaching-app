@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import SocialAuthButtons from '../components/SocialAuthButtons'
 
 var GOLD = '#C4973A'
 
@@ -89,6 +90,10 @@ export default function Login() {
             <h1 style={s.title}>Accède à ton<br /><em style={{ color: GOLD, fontStyle: 'italic', fontWeight: 300 }}>espace coaching</em></h1>
             {error && <div style={s.error}>{error}</div>}
             {success && <div style={s.successBox}>{success}</div>}
+
+            <SocialAuthButtons />
+            <div style={{ position: 'relative', textAlign: 'center', margin: '20px 0', borderTop: '1px solid var(--border)' }}><span style={{ position: 'relative', top: -10, background: 'var(--surface)', padding: '0 14px', fontSize: 12, color: 'var(--muted)' }}>ou</span></div>
+
             <div style={s.form}>
               <div style={s.inputWrap}>
                 <div style={s.inputLabel}>Email</div>
@@ -104,7 +109,7 @@ export default function Login() {
             </div>
             <div style={s.links}>
               <button onClick={function() { setMode('forgot'); resetForm() }} style={s.linkBtn}>Mot de passe oublié ?</button>
-              <button onClick={function() { setMode('signup'); resetForm() }} style={{ ...s.linkBtn, color: GOLD }}>Créer un compte</button>
+              <a href="/inscription" style={{ ...s.linkBtn, color: GOLD, textDecoration: 'none' }}>Créer un compte</a>
             </div>
           </div>
         )}
