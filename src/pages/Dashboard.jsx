@@ -631,6 +631,12 @@ export default function Dashboard({ profile, setProfile, coachBrand }) {
               </div>
             )}
 
+            {upcomingBookings.length > 1 && (
+              <div onClick={function() { navigateTo('booking') }} style={{ textAlign: 'center', marginTop: -8, marginBottom: 16, cursor: 'pointer' }}>
+                <span style={{ fontSize: 12.5, color: GOLD, fontWeight: 500 }}>+{upcomingBookings.length - 1} autre{(upcomingBookings.length - 1) > 1 ? 's' : ''} séance{(upcomingBookings.length - 1) > 1 ? 's' : ''} à venir ›</span>
+              </div>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
               <button onClick={function() { navigateTo('booking') }} className="tile-hover" style={{ ...s.tile, padding: '18px 14px' }}>
                 <div style={{ fontSize: 22 }}>📅</div><div style={{ fontSize: 13, fontWeight: 500 }}>Réserver</div>
